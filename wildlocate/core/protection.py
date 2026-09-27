@@ -38,7 +38,7 @@ def _clean(value):
     return text or None
 
 
-def _query_point(point, timeout=8):
+def _query_point(point, timeout=4):
     response = requests.get(
         PADUS_QUERY_URL,
         params={
@@ -88,7 +88,7 @@ def _biodiversity_managed(records):
     return False
 
 
-def analyze_protection_context(points, *, max_workers=8):
+def analyze_protection_context(points, *, max_workers=16):
     """Query PAD-US for high/very-high sampled habitat locations only.
 
     Returns a partial result when individual network calls fail. This keeps an
