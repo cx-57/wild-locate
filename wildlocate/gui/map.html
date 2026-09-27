@@ -38,8 +38,6 @@ const pinIcon = L.divIcon({className: "location-pin", html: "<span></span>", ico
 let marker = null;
 const areaLayer = L.layerGroup().addTo(map);
 let areaKey = null;
-const pointMarkers = new Map();
-let selectedPointIndex = null;
 let regionCenter = [42.2, -71.7];
 let bridge = null;
 let enabled = true;
@@ -73,25 +71,12 @@ function selectLocation(latlng) {
 map.on("click", (event) => selectLocation(event.latlng));
 document.getElementById("reset").addEventListener("click", () => map.setView(regionCenter, 7));
 
-function highlightResultPoint(index, zoom = true) {
-  const selected = pointMarkers.get(index);
-  if (!selected) return;
-  if (selectedPointIndex !== null) pointMarkers.get(selectedPointIndex)?.setStyle({weight: .5, radius: 3.5});
-  selectedPointIndex = index;
-  selected.setStyle({weight: 3, radius: 8});
-  if (zoom) map.setView(selected.getLatLng(), Math.max(map.getZoom(), 12), {animate: false});
-  selected.openPopup();
-}
-window.highlightResultPoint = highlightResultPoint;
-
 window.setLocationState = (state) => {
   if (state.regionCenter) regionCenter = state.regionCenter;
   enabled = state.enabled;
   document.body.setAttribute("aria-busy", String(!enabled));
   if (marker) { map.removeLayer(marker); marker = null; }
   areaLayer.clearLayers();
-  pointMarkers.clear();
-  selectedPointIndex = null;
   // Mercator cannot display the poles; manual latitude remains unmodified.
   if (!Number.isFinite(state.latitude) || !Number.isFinite(state.longitude) || Math.abs(state.latitude) > 85.05112878) return;
   const latlng = L.latLng(state.latitude, state.longitude);
@@ -105,19 +90,14 @@ window.setLocationState = (state) => {
     const colors = ["#b5423a", "#d88735", "#d5bb45", "#80a952", "#286648"];
     const points = state.areaPoints || [];
     if (points.length && marker) { map.removeLayer(marker); marker = null; }
-    for (const [index, point] of points.entries()) {
+    for (const point of points) {
       const ok = point.status === "ok";
       const color = ok ? colors[Math.min(4, Math.floor(point.percentile / 20))] : "#858585";
       const text = document.createElement("div");
       text.textContent = `${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)} — ` +
         (ok ? `${point.category}: score ${point.score.toFixed(3)}, percentile ${point.percentile}` : "Unavailable: outside coverage or incomplete data");
-      const pointMarker = L.circleMarker([point.latitude, point.longitude], {radius: 3.5, color: color, weight: 0.5, fillColor: color, fillOpacity: 0.8, bubblingMouseEvents: false})
+      L.circleMarker([point.latitude, point.longitude], {radius: 3.5, color: color, weight: 0.5, fillColor: color, fillOpacity: 0.8, bubblingMouseEvents: false})
         .bindPopup(text).addTo(areaLayer);
-      pointMarkers.set(index, pointMarker);
-      pointMarker.on('click', () => {
-        highlightResultPoint(index, false);
-        if (bridge) bridge.selectResultPoint(index);
-      });
     }
   } else {
     areaKey = null;
