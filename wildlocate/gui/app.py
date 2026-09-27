@@ -28,6 +28,7 @@ from wildlocate.core.registry import (
     enable_model, list_models, normalize_username,
 )
 from wildlocate.core.regional import REGIONS, get_region
+from wildlocate.core.predict import regional_geojson
 # Application palette and stylesheet
 
 def light_palette():
@@ -1590,8 +1591,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.stack)
         layout.addWidget(label("The suitability score is relative and does not represent the probability that the species is currently present.", "notice", True))
         self.export_button = button("↓  Export assessment as JSON", "link", self.export_result)
+        self.geojson_export_button = button("↓  Export regional GeoJSON", "link", self.export_geojson)
         self.export_button.hide()
-        layout.addWidget(self.export_button)
+        self.geojson_export_button.hide()
+        export_row = QHBoxLayout()
+        export_row.setContentsMargins(0, 0, 0, 0)
+        export_row.addWidget(self.export_button)
+        export_row.addWidget(self.geojson_export_button)
+        export_row.addStretch()
+        layout.addLayout(export_row)
         return card
 
     def fit_result_height(self, *_):
@@ -1720,6 +1728,7 @@ class MainWindow(QMainWindow):
             self.environment.hide()
             self.insights.hide()
             self.export_button.hide()
+            self.geojson_export_button.hide()
             self.empty_text.setText("Your selection has changed. Analyze this location to see a new assessment.")
             self.result_status.setText("AWAITING ANALYSIS")
         self.input_note.setText("Your analysis runs locally on this computer." if self.region == "MA" else "Analysis runs locally; uncached environmental tiles need an internet connection.")
@@ -1769,6 +1778,7 @@ class MainWindow(QMainWindow):
         self.insights.hide()
         self.environment.hide()
         self.export_button.hide()
+        self.geojson_export_button.hide()
         self.stack.setCurrentWidget(self.empty_page)
         self.empty_text.setText("Reading local environmental data and evaluating the species model." if self.region == "MA" else "Loading environmental tiles and evaluating the regional model. Missing tiles will download first.")
         self.result_status.setText("ANALYSIS IN PROGRESS")
@@ -1828,6 +1838,7 @@ class MainWindow(QMainWindow):
         self.environment.show()
         self.show_insights(result.get("insights", {}))
         self.export_button.show()
+        self.geojson_export_button.hide()
         self.input_note.setText("Assessment complete. Explore another location.")
 
     def show_area_result(self, result):
@@ -1872,6 +1883,7 @@ class MainWindow(QMainWindow):
         self.environment.hide()
         self.insights.hide()
         self.export_button.show()
+        self.geojson_export_button.show()
         self.result_status.setText("REGIONAL ASSESSMENT COMPLETE" if result['evaluated_points'] else "NO COVERAGE")
         self.location_map.set_area(result['radius_km'], result['points'])
         self.input_note.setText("Select a map point or candidate to see its suitability, drivers and model-based scenario.")
@@ -2009,6 +2021,27 @@ class MainWindow(QMainWindow):
             self.error.show()
             return
         self.input_note.setText("Assessment exported successfully.")
+
+    def export_geojson(self):
+        if self.result is None or self.result.get('analysis_type') != 'regional':
+            return
+        filename = f"wild-locate-{self.result['species'].lower().replace(' ', '-')}-regional.geojson"
+        path, _ = QFileDialog.getSaveFileName(self, "Export regional conservation screening", filename, "GeoJSON files (*.geojson)")
+        if not path:
+            return
+        try:
+            payload = regional_geojson(self.result)
+            data = (json.dumps(payload, indent=2, allow_nan=False) + "\n").encode("utf-8")
+        except (TypeError, ValueError):
+            self.error.setText("The regional assessment could not be converted to GeoJSON.")
+            self.error.show()
+            return
+        file = QSaveFile(path)
+        if not file.open(QIODevice.OpenModeFlag.WriteOnly) or file.write(data) != len(data) or not file.commit():
+            self.error.setText("The GeoJSON file could not be saved. Choose a writable folder and try again.")
+            self.error.show()
+            return
+        self.input_note.setText("Regional GeoJSON exported successfully.")
 
     def sign_out(self):
         self.signed_out = True
