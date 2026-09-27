@@ -12,9 +12,9 @@ import requests
 
 PADUS_QUERY_URL = (
     "https://edits.nationalmap.gov/arcgis/rest/services/"
-    "PAD-US/PAD_US_4_1/MapServer/0/query"
+    "PAD-US/PAD_US_gaz_combined/MapServer/0/query"
 )
-PADUS_SOURCE = "USGS Protected Areas Database of the United States (PAD-US) 4.1"
+PADUS_SOURCE = "USGS Protected Areas Database of the United States (PAD-US) 4.1 Combined"
 
 _OUT_FIELDS = ",".join(
     (
