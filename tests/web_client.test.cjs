@@ -286,3 +286,34 @@ test('JSON export preserves conservation and scenario data with explicit limitat
     assert.ok(exported.note.includes(phrase));
   }
 });
+
+test('Regional GeoJSON export preserves GIS point coordinates and conservation flags',async()=>{
+  const b=await browser();
+  b.context.assessment={
+    ...areaResult,
+    region:'MA',
+    limitations:['sampled locations only'],
+    points:[
+      areaResult.points[0],
+      {...areaResult.points[1],features:{forest_fraction_250m:.5},
+       restoration:{...areaResult.points[1].restoration,projected_score:.9,score_delta:.1}},
+    ],
+  };
+  b.run('showResult(assessment)');
+  assert.equal(b.get('export-geojson').hidden,false);
+  const geo=b.run('regionalGeoJSON(assessment)');
+  assert.equal(geo.type,'FeatureCollection');
+  assert.deepEqual(Array.from(geo.wildlocate.center),[-72.28,42.37]);
+  assert.equal(geo.features.length,2);
+  assert.deepEqual(Array.from(geo.features[1].geometry.coordinates),[-72.28,42.37]);
+  assert.equal(geo.features[1].properties.protection_candidate,true);
+  assert.equal(geo.features[1].properties.restoration_candidate,true);
+  assert.equal(geo.features[1].properties.environment_forest_fraction_250m,.5);
+  assert.equal(geo.features[1].properties.restoration_percentile_delta,15);
+  assert.equal(geo.features[0].properties.score,null);
+
+  b.context.assessment=complete.result;
+  b.run('showResult(assessment)');
+  assert.equal(b.get('export-geojson').hidden,true);
+});
+
