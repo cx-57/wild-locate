@@ -15,6 +15,14 @@ let map = null;
 let overlay = null;
 let authCreate = false;
 
+let deepDiveJobId = null;
+let deepDiveReport = null;
+let deepDiveRevision = 0;
+let deepDiveBusy = false;
+let deepDiveMap = null;
+let deepDiveOverlay = null;
+let deepDiveStageTimer = null;
+
 let managerRegion = 'MA';
 let modelRecords = [];
 let selectedModelId = null;
@@ -127,7 +135,10 @@ $('sign-out').addEventListener('click', async () => {
   }
   activeJob = null;
   result = null;
+  deepDiveJobId = null;
+  deepDiveReport = null;
   $('species-page').hidden = true;
+  $('deep-dive-page').hidden = true;
   $('explore-page').hidden = false;
   setAuthMode(false);
   showAuth();
@@ -282,6 +293,7 @@ function clearResult() {
   $('scores').open = false;
   $('conditions').open = false;
   $('point-percentile').hidden = true;
+  deepDiveReport = null;
   error('');
 }
 
@@ -475,6 +487,9 @@ function showResult(data) {
     $('feature-values').append(term, detail);
   }
 
+  $('deep-dive-cta-copy').textContent = area
+    ? `Research the same ${data.radius_km} km area with model-driver comparisons, pressure signals, and scenario experiments.`
+    : 'Expand this point into a 10 km research area for a deeper landscape-level analysis.';
   $('status').textContent = area
     ? 'Assessment complete. Select a map point for details.'
     : 'Assessment complete.';
@@ -598,11 +613,22 @@ $('reset-map').addEventListener('click', () => {
 
 function showSection(section, focus = null) {
   const studio = section === 'species';
-  $('explore-page').hidden = studio;
+  const deepDive = section === 'deep-dive';
+  $('explore-page').hidden = studio || deepDive;
   $('species-page').hidden = !studio;
+  $('deep-dive-page').hidden = !deepDive;
   $('explore-nav').setAttribute('aria-current', studio ? 'false' : 'page');
   $('train-species-nav').setAttribute('aria-current', studio && focus !== 'models' ? 'page' : 'false');
   $('models-nav').setAttribute('aria-current', studio && focus === 'models' ? 'page' : 'false');
+
+  if (deepDive) {
+    setTimeout(() => {
+      initDeepDiveMap();
+      if (deepDiveMap) deepDiveMap.invalidateSize({pan: false});
+    }, 0);
+    window.scrollTo({top: 0, behavior: 'smooth'});
+    return;
+  }
 
   if (!studio) {
     setTimeout(() => map && map.invalidateSize({pan: false}), 0);
@@ -732,7 +758,7 @@ async function loadModels(selectId = null) {
 }
 
 async function openSpeciesStudio(focus = 'train') {
-  if (busy) return;
+  if (busy || deepDiveBusy) return;
   managerRegion = $('region').value || 'MA';
 
   $('species-region').replaceChildren(
