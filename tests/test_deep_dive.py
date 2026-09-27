@@ -192,7 +192,7 @@ class DeepDiveAnalysisTests(unittest.TestCase):
         }
         self.assertIn("development", deep_dive.answer_deep_dive_question(report, "What is the biggest threat?").lower())
         self.assertIn("forest fraction 1000m", deep_dive.answer_deep_dive_question(report, "What helps habitat?").lower())
-        self.assertIn("55th to 72th", deep_dive.answer_deep_dive_question(report, "Best restoration scenario?"))
+        self.assertIn("55th to 72nd", deep_dive.answer_deep_dive_question(report, "Best restoration scenario?"))
         self.assertIn("94th percentile", deep_dive.answer_deep_dive_question(report, "Where is the strongest habitat?"))
         self.assertIn("4 intersect", deep_dive.answer_deep_dive_question(report, "How much strong habitat is protected?"))
 
