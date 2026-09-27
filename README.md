@@ -66,14 +66,13 @@ Deep Dive keeps model interpretation separate from ecological causation. Feature
 
 ### Current data scope
 
-Deep Dive currently uses the same environmental layers available to the species model: land cover, impervious surface, elevation/terrain, water context, and road context.
+Deep Dive uses the environmental layers available to the species model—land cover, impervious surface, elevation/terrain, water context, and road context—and adds **USGS PAD-US 4.1** protection context for High and Very High sampled habitat locations.
 
-Two planned research layers are intentionally **not** claimed yet:
+For those stronger samples, Wild-Locate checks whether the sampled coordinate intersects a PAD-US managed/protected-area record. It separately counts records with **GAP Status 1 or 2**, which indicate management intent focused on maintaining biodiversity. These are point-overlap checks, not protected-acreage estimates, and a point with no PAD-US intersection should not be interpreted as definitively unprotected.
 
-- protected-area boundaries / conservation status;
-- historical land-cover or development change.
+PAD-US is an external public service. If it is unavailable or only some lookups succeed, the habitat-model Deep Dive still completes and labels protection context unavailable or partial rather than fabricating results.
 
-Those require additional authoritative datasets before Wild-Locate can support protection-status or temporal-threat conclusions.
+**Historical land-cover/development change is not connected yet.** That requires an additional time-series dataset before Wild-Locate can make claims about recent habitat loss or development trends.
 
 ## Architecture
 
