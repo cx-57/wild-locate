@@ -35,6 +35,32 @@ def run_prediction(account=None):
         print(json.dumps(response, allow_nan=False), flush=True)
 
 
+def run_deep_dive(account=None):
+    with redirect_stdout(sys.stderr):
+        from wildlocate.core.deep_dive import analyze_deep_dive
+
+    for line in sys.stdin:
+        try:
+            request = json.loads(line)
+            with redirect_stdout(sys.stderr):
+                result = analyze_deep_dive(
+                    request["species"],
+                    request["latitude"],
+                    request["longitude"],
+                    request["radius_km"],
+                    request.get("region", "MA"),
+                    username=account,
+                )
+            response = {"result": result}
+        except Exception:
+            traceback.print_exc(file=sys.stderr)
+            response = {
+                "error": "The Conservation Deep Dive could not be completed. Check the selected model and environmental data, then try again.",
+                "code": "deep_dive_error",
+            }
+        print(json.dumps(response, allow_nan=False), flush=True)
+
+
 def run_training(job_id, region, account):
     from requests.exceptions import RequestException
     from wildlocate.core.registry import cleanup_job
@@ -90,6 +116,9 @@ def main():
     prediction = subparsers.add_parser("predict")
     prediction.add_argument("--account")
 
+    deep_dive = subparsers.add_parser("deep-dive")
+    deep_dive.add_argument("--account")
+
     training = subparsers.add_parser("train")
     training.add_argument("--job-id", required=True)
     training.add_argument("--region", default="MA")
@@ -98,6 +127,8 @@ def main():
     args = parser.parse_args()
     if args.mode == "predict":
         run_prediction(args.account)
+    elif args.mode == "deep-dive":
+        run_deep_dive(args.account)
     else:
         run_training(args.job_id, args.region, args.account)
 
