@@ -191,22 +191,6 @@ def habitat_insights(model, frame, comparison, comparison_scores, score):
                            'reference': reference, 'effect': score - alternative})
     influences.sort(key=lambda item: abs(item['effect']), reverse=True)
 
-    return {'influences': influences,
-            **restoration_scenarios(model, frame, comparison_scores, score)}
-
-
-def restoration_scenarios(model, frame, comparison_scores, score):
-    """Search the existing forest/impervious counterfactual grid without mutating frame.
-
-    These are model-based scenarios, not causal predictions of restoration.
-    Keep the strongest score gain per scenario type, preserving point behavior.
-    """
-    def evaluate(candidate):
-        value = float(model.predict_proba(candidate)[0, 1])
-        if not np.isfinite(value):
-            raise ValueError('Non-finite scenario prediction')
-        return value, int(round(100 * np.mean(comparison_scores < value)))
-
     scenarios = []
     tested = 0
     baseline_percentile = int(round(100 * np.mean(comparison_scores < score)))
@@ -251,7 +235,7 @@ def restoration_scenarios(model, frame, comparison_scores, score):
         if best is not None:
             scenarios.append(best)
     scenarios.sort(key=lambda item: item['delta'], reverse=True)
-    return {'scenarios': scenarios,
+    return {'influences': influences, 'scenarios': scenarios,
             'baseline_score': float(score), 'baseline_percentile': baseline_percentile,
             'scenarios_tested': tested}
 
@@ -275,89 +259,6 @@ def build_grid(latitude, longitude, radius_km):
     return points
 
 
-def summarize_conservation(points):
-    """Screen sampled locations only; counts are not habitat area estimates.
-
-    Stable sorting preserves grid order for tied percentiles. Protection
-    candidates must already be High/Very High; restoration requires an
-    improvement in percentile, not just raw model score.
-    """
-    available = [(index, point) for index, point in enumerate(points) if point['status'] == 'ok']
-    total = len(available)
-    distribution = {}
-    for category in ('Very Low', 'Low', 'Moderate', 'High', 'Very High'):
-        count = sum(point['category'] == category for _, point in available)
-        distribution[category] = {'count': count, 'percentage': 100 * count / total if total else 0.}
-
-    def candidate(item):
-        index, point = item
-        return {key: point[key] for key in ('latitude', 'longitude', 'score', 'percentile', 'category')} | {
-            'point_index': index, 'restoration': point.get('restoration')}
-
-    protection = sorted((item for item in available if item[1]['percentile'] >= 60),
-                        key=lambda item: -item[1]['percentile'])
-    restoration = sorted((item for item in available
-                          if (item[1].get('restoration') or {}).get('percentile_delta', 0) > 0),
-                         key=lambda item: -item[1]['restoration']['percentile_delta'])
-    return {'evaluated_points': total, 'habitat_distribution': distribution,
-            'protection_candidates': [candidate(item) for item in protection[:5]],
-            'restoration_candidates': [candidate(item) for item in restoration[:5]]}
-
-
-def regional_geojson(result):
-    """Convert a completed regional assessment into GIS-friendly GeoJSON."""
-    if result.get('analysis_type') != 'regional':
-        raise ValueError('GeoJSON export is available only for regional assessments.')
-
-    conservation = result.get('conservation') or {}
-    protection_indices = {item['point_index'] for item in conservation.get('protection_candidates', [])}
-    restoration_indices = {item['point_index'] for item in conservation.get('restoration_candidates', [])}
-    features = []
-    for index, point in enumerate(result.get('points', [])):
-        properties = {
-            'point_index': index,
-            'status': point.get('status'),
-            'reason': point.get('reason'),
-            'score': point.get('score'),
-            'percentile': point.get('percentile'),
-            'category': point.get('category'),
-            'protection_candidate': index in protection_indices,
-            'restoration_candidate': index in restoration_indices,
-        }
-        for name, value in (point.get('features') or {}).items():
-            properties[f'environment_{name}'] = value
-        restoration = point.get('restoration')
-        if restoration:
-            properties.update({
-                'restoration_description': restoration.get('description'),
-                'restoration_projected_score': restoration.get('projected_score'),
-                'restoration_score_delta': restoration.get('score_delta'),
-                'restoration_projected_percentile': restoration.get('projected_percentile'),
-                'restoration_percentile_delta': restoration.get('percentile_delta'),
-            })
-        features.append({
-            'type': 'Feature',
-            'geometry': {'type': 'Point', 'coordinates': [point['longitude'], point['latitude']]},
-            'properties': properties,
-        })
-
-    return {
-        'type': 'FeatureCollection',
-        'name': f"Wild-Locate {result.get('species', 'species')} conservation screening",
-        'wildlocate': {
-            'species': result.get('species'),
-            'region': result.get('region'),
-            'center': [result.get('longitude'), result.get('latitude')],
-            'radius_km': result.get('radius_km'),
-            'grid_spacing_km': result.get('grid_spacing_km'),
-            'model': result.get('model'),
-            'training_observations': result.get('training_observations'),
-            'limitations': result.get('limitations', []),
-        },
-        'features': features,
-    }
-
-
 def predict_area(species, latitude, longitude, radius_km, region='MA', *, username=None):
     points = build_grid(latitude, longitude, radius_km)
     region = get_region(region).code
@@ -374,7 +275,7 @@ def predict_area(species, latitude, longitude, radius_km, region='MA', *, userna
         if metrics.get('feature_schema') != SCHEMA or metrics.get('region') != region:
             raise ValueError('This model is not compatible with the selected region.')
         extractor = lambda lat, lon: extract_regional_features(lat, lon, region)
-    comparison_scores, comparison = load_comparison_scores(model, predictors, record.species, record)
+    comparison_scores, _ = load_comparison_scores(model, predictors, record.species, record)
     for point in points:
         try:
             features = extractor(point['latitude'], point['longitude'])
@@ -391,37 +292,11 @@ def predict_area(species, latitude, longitude, radius_km, region='MA', *, userna
             raise RuntimeError('Prediction returned a non-finite suitability score.')
         percentile = percentile_of_score(score, comparison_scores)
         point.update(status='ok', score=score, percentile=percentile, category=category_for_percentile(percentile))
-        point['features'] = {name: float(frame.iloc[0][name]) for name in predictors}
-        point['restoration'] = None
-        try:
-            insights = habitat_insights(model, frame, comparison, comparison_scores, score)
-            point['insights'] = insights
-            scenarios = insights['scenarios']
-            if scenarios:
-                best = max(scenarios, key=lambda s: (s['percentile'], s['delta']))
-                point['restoration'] = {
-                    'current_percentile': percentile,
-                    'projected_percentile': best['percentile'],
-                    'percentile_delta': best['percentile'] - percentile,
-                    'description': best['title'],
-                    'changes': best['changes'],
-                    'projected_score': best['score'],
-                    'score_delta': best['delta'],
-                }
-        except Exception:
-            logging.getLogger(__name__).exception('Regional habitat insights unavailable')
-            point['insights'] = {'error': 'Model-based scenarios and drivers could not be calculated. Suitability is still available.'}
     scored = [p for p in points if p['status'] == 'ok']
     return {
         'analysis_type': 'regional', 'species': record.species, 'region': region,
         'latitude': latitude, 'longitude': longitude, 'radius_km': radius_km,
         'grid_spacing_km': radius_km / 5, 'points': points,
-        'conservation': summarize_conservation(points),
-        'limitations': [
-            'Suitability is relative, not presence probability.',
-            'The 81 points are sampled locations, not continuous habitat coverage. Distribution percentages describe evaluated samples, not land area.',
-            'Restoration scenarios are counterfactual ML outputs, not causal predictions. Candidates require further investigation, not automatic intervention.',
-        ],
         'evaluated_points': len(scored), 'unavailable_points': len(points) - len(scored),
         'mean_score': float(np.mean([p['score'] for p in scored])) if scored else None,
         'model': format_model_name(metrics.get('selected_model', 'Unknown Model')),
