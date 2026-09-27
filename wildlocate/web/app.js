@@ -676,6 +676,49 @@ function renderDeepDive(report) {
     pressures.append(card);
   }
 
+  const protection = report.protection || {};
+  const protectionMetrics = $('deep-dive-protection-metrics');
+  const protectionList = $('deep-dive-protection');
+  protectionMetrics.replaceChildren();
+  protectionList.replaceChildren();
+  if (protection.status === 'unavailable') {
+    researchMetric(protectionMetrics, 'Unavailable', 'PAD-US status');
+    researchRow(
+      protectionList,
+      'Protection context could not be retrieved',
+      protection.message || 'The USGS PAD-US service was unavailable. The habitat-model portions of this Deep Dive are still valid.'
+    );
+  } else {
+    researchMetric(protectionMetrics, String(protection.checked_samples || 0), 'Strong samples checked');
+    researchMetric(protectionMetrics, String(protection.intersecting_padus || 0), 'Intersect PAD-US');
+    researchMetric(protectionMetrics, String(protection.biodiversity_managed || 0), 'GAP 1–2 samples');
+    researchMetric(protectionMetrics, String(protection.not_intersecting_padus || 0), 'No PAD-US intersection');
+    if (protection.status === 'partial') {
+      researchRow(
+        protectionList,
+        'Partial PAD-US coverage',
+        `${protection.failed_queries} sampled location${protection.failed_queries === 1 ? '' : 's'} could not be checked because the external service did not respond.`
+      );
+    }
+    const orderedProtection = [...(protection.samples || [])]
+      .sort((a, b) => Number(b.percentile || 0) - Number(a.percentile || 0))
+      .slice(0, 6);
+    for (const sample of orderedProtection) {
+      const named = (sample.areas || []).find(area => area.name || area.designation || area.manager);
+      const context = sample.within_padus
+        ? `Intersects PAD-US${sample.biodiversity_managed ? ' · GAP 1–2 biodiversity-management intent' : ''}${named?.name ? ` · ${named.name}` : ''}`
+        : 'No PAD-US record intersects this sampled point; this does not prove the land is unprotected.';
+      researchRow(
+        protectionList,
+        `${sample.percentile}th percentile · ${coords(sample.latitude, sample.longitude)}`,
+        context
+      );
+    }
+    if (!orderedProtection.length) {
+      researchRow(protectionList, 'No high-suitability samples to check', 'PAD-US is queried only for High and Very High sampled habitat locations.');
+    }
+  }
+
   const contrasts = $('deep-dive-contrasts');
   contrasts.replaceChildren();
   for (const row of report.habitat?.contrasts || []) {
@@ -856,6 +899,7 @@ $('deep-dive-chat-form').addEventListener('submit', event => {
 $('deep-q-strengths').addEventListener('click', () => askDeepDive('What helps this habitat?'));
 $('deep-q-pressures').addEventListener('click', () => askDeepDive('What is the biggest pressure?'));
 $('deep-q-where').addEventListener('click', () => askDeepDive('Where is habitat strongest?'));
+$('deep-q-protection').addEventListener('click', () => askDeepDive('How much strong habitat overlaps PAD-US?'));
 $('deep-q-scenarios').addEventListener('click', () => askDeepDive('What scenario changed the model most?'));
 
 async function poll(id, version) {
