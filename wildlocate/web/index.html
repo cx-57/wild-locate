@@ -119,10 +119,7 @@
         <div id="result" hidden>
           <div class="result-title">
             <div><span class="eyebrow" id="result-kind"></span><h2 id="result-title"></h2></div>
-            <div class="result-actions">
-              <button id="export" type="button" class="text-button">Export JSON ↓</button>
-              <button id="export-geojson" type="button" class="text-button" hidden>Export GeoJSON ↓</button>
-            </div>
+            <button id="export" type="button" class="text-button">Export JSON ↓</button>
           </div>
           <div id="metrics" class="metrics"></div>
 
@@ -149,18 +146,6 @@
             <span><i class="moderate"></i>Moderate</span><span><i class="high"></i>High</span>
             <span><i class="very-high"></i>Very high</span><span><i class="unavailable"></i>No data</span>
           </div>
-          <section id="conservation" hidden aria-labelledby="conservation-title">
-            <h3 id="conservation-title">Conservation Screening</h3>
-            <p class="hint">Each listed location is a candidate for further investigation. These are sampled locations, not habitat-area estimates or recommendations.</p>
-            <h4>Habitat distribution</h4>
-            <div id="habitat-distribution" class="legend"></div>
-            <div class="conservation-columns">
-              <div><h4>Top existing high-suitability locations</h4><div id="protection-candidates" class="candidate-list"></div></div>
-              <div><h4>Top modeled restoration opportunities</h4><div id="restoration-candidates" class="candidate-list"></div></div>
-            </div>
-            <p class="hint">Restoration rankings compare percentile improvement in model-based scenarios. Counterfactual ML outputs are not causal predictions.</p>
-          </section>
-          <section id="selected-point" class="selected-point" hidden aria-live="polite" aria-label="Selected sampled location"></section>
           <details id="scores">
             <summary>View all scores</summary>
             <div class="table-scroll">
@@ -172,7 +157,7 @@
             </div>
           </details>
           <details id="conditions" hidden><summary>Environmental conditions</summary><dl id="feature-values"></dl></details>
-          <p class="disclaimer">Suitability is relative, not a probability that an animal is present. The 81 points in regional results are sampled locations, not continuous habitat coverage. Restoration scenarios are counterfactual ML outputs, not causal predictions.</p>
+          <p class="disclaimer">Suitability is relative, not a probability that an animal is present. Regional results sample a grid, not continuous habitat coverage.</p>
         </div>
       </div>
     </section>
