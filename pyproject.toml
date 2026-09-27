@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "wildlocate"
+version = "0.2.0"
+requires-python = ">=3.10"
+dependencies = [
+    "geopandas",
+    "joblib",
+    "numpy",
+    "pandas",
+    "platformdirs",
+    "pyproj",
+    "PyQt6",
+    "PyQt6-WebEngine",
+    "rasterio",
+    "requests",
+    "scikit-learn",
+    "xgboost",
+    "shapely",
+]
+
+[project.scripts]
+wildlocate = "wildlocate.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["wildlocate*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+"wildlocate" = ["bundled/*"]
+"wildlocate.core" = ["state_boundaries.geojson"]
+"wildlocate.gui" = ["map.html", "leaflet.css", "leaflet.js"]
+"wildlocate.web" = ["*.html", "*.css", "*.js"]

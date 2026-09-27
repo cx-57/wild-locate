@@ -1,0 +1,1 @@
+"""Wild-Locate desktop interface."""

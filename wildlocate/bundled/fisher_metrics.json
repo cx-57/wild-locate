@@ -1,0 +1,282 @@
+{
+  "species": "Fisher",
+  "species_slug": "fisher",
+  "total_rows": 1912,
+  "presence_count": 478,
+  "background_count": 1434,
+  "predictor_names": [
+    "forest_fraction_250m",
+    "forest_fraction_1000m",
+    "wetland_fraction_250m",
+    "wetland_fraction_1000m",
+    "developed_fraction_250m",
+    "developed_fraction_1000m",
+    "open_water_fraction_250m",
+    "open_water_fraction_1000m",
+    "mean_impervious_250m",
+    "mean_impervious_1000m",
+    "elevation_m",
+    "mean_slope_250m",
+    "mean_slope_1000m",
+    "terrain_ruggedness_1000m",
+    "distance_to_water_m",
+    "distance_to_road_m"
+  ],
+  "spatial_block_size_m": 10000,
+  "number_of_folds": 5,
+  "random_state": 42,
+  "selected_model": "RandomForest",
+  "candidate_models": [
+    "LogisticRegression",
+    "RandomForest",
+    "XGBoost"
+  ],
+  "leakage_check": {
+    "excluded_columns": [
+      "latitude",
+      "longitude",
+      "observation_id",
+      "presence",
+      "species",
+      "species_name",
+      "species_slug",
+      "taxon_id"
+    ],
+    "evidence": {
+      "latitude_not_predictor": true,
+      "longitude_not_predictor": true,
+      "presence_not_predictor": true
+    }
+  },
+  "split_notes": [
+    "Used spatial 10 km x 10 km blocks for cross-validation."
+  ],
+  "metrics_by_model": [
+    {
+      "model": "LogisticRegression",
+      "mean_roc_auc": 0.7622812060168146,
+      "std_roc_auc": 0.03807361871388358,
+      "mean_pr_auc": 0.4658476258227167,
+      "std_pr_auc": 0.03144787577408586,
+      "roc_auc_folds": [
+        0.8101689976689977,
+        0.7569078947368421,
+        0.8016131365740741,
+        0.7251966783216783,
+        0.7175193227824808
+      ],
+      "pr_auc_folds": [
+        0.4942400325094005,
+        0.45080163533764356,
+        0.5105767498303166,
+        0.42619724184146324,
+        0.44742246959475956
+      ],
+      "fold_metrics": [
+        {
+          "fold": 1,
+          "roc_auc": 0.8101689976689977,
+          "pr_auc": 0.4942400325094005,
+          "train_presence": 382,
+          "train_background": 1148,
+          "val_presence": 96,
+          "val_background": 286
+        },
+        {
+          "fold": 2,
+          "roc_auc": 0.7569078947368421,
+          "pr_auc": 0.45080163533764356,
+          "train_presence": 383,
+          "train_background": 1146,
+          "val_presence": 95,
+          "val_background": 288
+        },
+        {
+          "fold": 3,
+          "roc_auc": 0.8016131365740741,
+          "pr_auc": 0.5105767498303166,
+          "train_presence": 382,
+          "train_background": 1146,
+          "val_presence": 96,
+          "val_background": 288
+        },
+        {
+          "fold": 4,
+          "roc_auc": 0.7251966783216783,
+          "pr_auc": 0.42619724184146324,
+          "train_presence": 382,
+          "train_background": 1148,
+          "val_presence": 96,
+          "val_background": 286
+        },
+        {
+          "fold": 5,
+          "roc_auc": 0.7175193227824808,
+          "pr_auc": 0.44742246959475956,
+          "train_presence": 383,
+          "train_background": 1148,
+          "val_presence": 95,
+          "val_background": 286
+        }
+      ]
+    },
+    {
+      "model": "RandomForest",
+      "mean_roc_auc": 0.7832284888144263,
+      "std_roc_auc": 0.048786685325704536,
+      "mean_pr_auc": 0.5047599150760992,
+      "std_pr_auc": 0.054535227357670454,
+      "roc_auc_folds": [
+        0.8517992424242424,
+        0.7964912280701755,
+        0.8124638310185185,
+        0.7276369463869464,
+        0.7277511961722488
+      ],
+      "pr_auc_folds": [
+        0.5799803987498946,
+        0.5072926343809555,
+        0.5480796023496098,
+        0.4441951760786198,
+        0.44425176382141646
+      ],
+      "fold_metrics": [
+        {
+          "fold": 1,
+          "roc_auc": 0.8517992424242424,
+          "pr_auc": 0.5799803987498946,
+          "train_presence": 382,
+          "train_background": 1148,
+          "val_presence": 96,
+          "val_background": 286
+        },
+        {
+          "fold": 2,
+          "roc_auc": 0.7964912280701755,
+          "pr_auc": 0.5072926343809555,
+          "train_presence": 383,
+          "train_background": 1146,
+          "val_presence": 95,
+          "val_background": 288
+        },
+        {
+          "fold": 3,
+          "roc_auc": 0.8124638310185185,
+          "pr_auc": 0.5480796023496098,
+          "train_presence": 382,
+          "train_background": 1146,
+          "val_presence": 96,
+          "val_background": 288
+        },
+        {
+          "fold": 4,
+          "roc_auc": 0.7276369463869464,
+          "pr_auc": 0.4441951760786198,
+          "train_presence": 382,
+          "train_background": 1148,
+          "val_presence": 96,
+          "val_background": 286
+        },
+        {
+          "fold": 5,
+          "roc_auc": 0.7277511961722488,
+          "pr_auc": 0.44425176382141646,
+          "train_presence": 383,
+          "train_background": 1148,
+          "val_presence": 95,
+          "val_background": 286
+        }
+      ]
+    },
+    {
+      "model": "XGBoost",
+      "mean_roc_auc": 0.7651147625674766,
+      "std_roc_auc": 0.035846197897536757,
+      "mean_pr_auc": 0.4672618043458533,
+      "std_pr_auc": 0.03603479890645756,
+      "roc_auc_folds": [
+        0.8146853146853148,
+        0.7705043859649123,
+        0.7900390625,
+        0.7172202797202798,
+        0.7331247699668753
+      ],
+      "pr_auc_folds": [
+        0.5082329625567641,
+        0.4627044798757113,
+        0.5081608675386811,
+        0.4367217979410413,
+        0.42048891381706877
+      ],
+      "fold_metrics": [
+        {
+          "fold": 1,
+          "roc_auc": 0.8146853146853148,
+          "pr_auc": 0.5082329625567641,
+          "train_presence": 382,
+          "train_background": 1148,
+          "val_presence": 96,
+          "val_background": 286
+        },
+        {
+          "fold": 2,
+          "roc_auc": 0.7705043859649123,
+          "pr_auc": 0.4627044798757113,
+          "train_presence": 383,
+          "train_background": 1146,
+          "val_presence": 95,
+          "val_background": 288
+        },
+        {
+          "fold": 3,
+          "roc_auc": 0.7900390625,
+          "pr_auc": 0.5081608675386811,
+          "train_presence": 382,
+          "train_background": 1146,
+          "val_presence": 96,
+          "val_background": 288
+        },
+        {
+          "fold": 4,
+          "roc_auc": 0.7172202797202798,
+          "pr_auc": 0.4367217979410413,
+          "train_presence": 382,
+          "train_background": 1148,
+          "val_presence": 96,
+          "val_background": 286
+        },
+        {
+          "fold": 5,
+          "roc_auc": 0.7331247699668753,
+          "pr_auc": 0.42048891381706877,
+          "train_presence": 383,
+          "train_background": 1148,
+          "val_presence": 95,
+          "val_background": 286
+        }
+      ]
+    }
+  ],
+  "selected_model_top_features": [
+    {
+      "feature": "elevation_m",
+      "importance": 0.11779116691272638
+    },
+    {
+      "feature": "forest_fraction_250m",
+      "importance": 0.1145909084410324
+    },
+    {
+      "feature": "distance_to_road_m",
+      "importance": 0.09726449170939055
+    },
+    {
+      "feature": "forest_fraction_1000m",
+      "importance": 0.07300735605125364
+    },
+    {
+      "feature": "mean_impervious_250m",
+      "importance": 0.07253718821510739
+    }
+  ]
+}

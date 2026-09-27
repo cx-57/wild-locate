@@ -1,0 +1,1 @@
+"""Wild-Locate browser interface."""
