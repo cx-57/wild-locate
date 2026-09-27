@@ -34,6 +34,14 @@ let handledCompletionId = null;
 
 const colors = ['#b5423a', '#d88735', '#d5bb45', '#80a952', '#286648'];
 const number = value => Number.isFinite(value) ? value.toFixed(3) : '—';
+const ordinal = value => {
+  const n = Math.round(Number(value) || 0);
+  const mod100 = n % 100;
+  const suffix = mod100 >= 11 && mod100 <= 13
+    ? 'th'
+    : ({1:'st',2:'nd',3:'rd'}[n % 10] || 'th');
+  return `${n}${suffix}`;
+};
 const coords = (lat, lon) =>
   `${Math.abs(lat).toFixed(4)}° ${lat >= 0 ? 'N' : 'S'} / ${Math.abs(lon).toFixed(4)}° ${lon >= 0 ? 'E' : 'W'}`;
 
@@ -137,6 +145,10 @@ $('sign-out').addEventListener('click', async () => {
   result = null;
   deepDiveJobId = null;
   deepDiveReport = null;
+  deepDiveRevision += 1;
+  deepDiveBusy = false;
+  if (deepDiveStageTimer) clearInterval(deepDiveStageTimer);
+  deepDiveStageTimer = null;
   $('species-page').hidden = true;
   $('deep-dive-page').hidden = true;
   $('explore-page').hidden = false;
@@ -617,7 +629,7 @@ function renderDeepDive(report) {
   researchMetric(metrics, String(overview.evaluated_points ?? 0), 'Samples evaluated');
   researchMetric(
     metrics,
-    Number.isFinite(overview.mean_percentile) ? `${Math.round(overview.mean_percentile)}th` : '—',
+    Number.isFinite(overview.mean_percentile) ? ordinal(overview.mean_percentile) : '—',
     'Mean habitat percentile'
   );
   researchMetric(metrics, String(overview.high_suitability_points ?? 0), 'High / very high samples');
@@ -626,7 +638,7 @@ function renderDeepDive(report) {
   const strongest = overview.strongest_point;
   const sector = overview.strongest_sector;
   $('deep-dive-overview-copy').textContent = strongest
-    ? `The strongest sampled location reached the ${strongest.percentile}th percentile.` +
+    ? `The strongest sampled location reached the ${ordinal(strongest.percentile)} percentile.` +
       (sector ? ` At a broader scale, the ${sector.name.toLowerCase()} sector had the highest mean percentile (${Math.round(sector.mean_percentile)}).` : '')
     : 'No sampled location had enough environmental data for a landscape summary.';
 
@@ -710,7 +722,7 @@ function renderDeepDive(report) {
         : 'No PAD-US record intersects this sampled point; this does not prove the land is unprotected.';
       researchRow(
         protectionList,
-        `${sample.percentile}th percentile · ${coords(sample.latitude, sample.longitude)}`,
+        `${ordinal(sample.percentile)} percentile · ${coords(sample.latitude, sample.longitude)}`,
         context
       );
     }
@@ -736,7 +748,7 @@ function renderDeepDive(report) {
   for (const scenario of report.scenarios || []) {
     researchRow(
       scenarios,
-      `+${scenario.percentile_delta} percentile points · ${scenario.current_percentile}th → ${scenario.projected_percentile}th`,
+      `+${scenario.percentile_delta} percentile points · ${ordinal(scenario.current_percentile)} → ${ordinal(scenario.projected_percentile)}`,
       `${scenario.description} · ${coords(scenario.latitude, scenario.longitude)}`
     );
   }
