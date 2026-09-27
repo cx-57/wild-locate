@@ -287,6 +287,7 @@ function clearResult() {
   $('point-percentile').hidden = true;
   $('conservation').hidden = true;
   $('selected-point').hidden = true;
+  $('export-geojson').hidden = true;
   selectedPointIndex = null;
   candidateButtons = [];
   pointMarkers.clear();
@@ -516,6 +517,7 @@ function metric(value, title) {
 function showResult(data) {
   result = data;
   const area = data.analysis_type === 'regional';
+  $('export-geojson').hidden = !area;
   showConservation(data);
   $('empty').hidden = true;
   $('result').hidden = false;
@@ -673,6 +675,65 @@ $('cancel').addEventListener('click', async () => {
   }
 });
 
+function downloadJSON(payload, filename, type = 'application/json') {
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(payload, null, 2)], {type})
+  );
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function regionalGeoJSON(data) {
+  if (data?.analysis_type !== 'regional') throw Error('GeoJSON export requires a regional assessment.');
+  const summary = data.conservation || {};
+  const protection = new Set((summary.protection_candidates || []).map(item => item.point_index));
+  const restoration = new Set((summary.restoration_candidates || []).map(item => item.point_index));
+  return {
+    type: 'FeatureCollection',
+    name: `Wild-Locate ${data.species} conservation screening`,
+    wildlocate: {
+      species: data.species,
+      region: data.region,
+      center: [data.longitude, data.latitude],
+      radius_km: data.radius_km,
+      grid_spacing_km: data.grid_spacing_km,
+      model: data.model,
+      training_observations: data.training_observations,
+      limitations: data.limitations || [],
+    },
+    features: (data.points || []).map((point, index) => {
+      const properties = {
+        point_index: index,
+        status: point.status,
+        reason: point.reason || null,
+        score: point.status === 'ok' ? point.score : null,
+        percentile: point.status === 'ok' ? point.percentile : null,
+        category: point.status === 'ok' ? point.category : null,
+        protection_candidate: protection.has(index),
+        restoration_candidate: restoration.has(index),
+      };
+      for (const [name, value] of Object.entries(point.features || {})) {
+        properties[`environment_${name}`] = value;
+      }
+      if (point.restoration) {
+        properties.restoration_description = point.restoration.description;
+        properties.restoration_projected_score = point.restoration.projected_score ?? null;
+        properties.restoration_score_delta = point.restoration.score_delta ?? null;
+        properties.restoration_projected_percentile = point.restoration.projected_percentile;
+        properties.restoration_percentile_delta = point.restoration.percentile_delta;
+      }
+      return {
+        type: 'Feature',
+        geometry: {type: 'Point', coordinates: [point.longitude, point.latitude]},
+        properties,
+      };
+    }),
+  };
+}
+
 $('export').addEventListener('click', () => {
   if (!result) return;
   const payload = {
@@ -682,15 +743,19 @@ $('export').addEventListener('click', () => {
         ? ' The 81 points are sampled locations, not continuous habitat coverage. Restoration scenarios are counterfactual ML outputs, not causal predictions. Each candidate requires further investigation.'
         : ''),
   };
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'})
+  downloadJSON(
+    payload,
+    `wild-locate-${result.species.toLowerCase().replaceAll(' ', '-')}.json`
   );
-  const link = document.createElement('a');
-  link.href = url;
-  link.download =
-    `wild-locate-${result.species.toLowerCase().replaceAll(' ', '-')}.json`;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+$('export-geojson').addEventListener('click', () => {
+  if (!result || result.analysis_type !== 'regional') return;
+  downloadJSON(
+    regionalGeoJSON(result),
+    `wild-locate-${result.species.toLowerCase().replaceAll(' ', '-')}-regional.geojson`,
+    'application/geo+json'
+  );
 });
 
 $('point-mode').addEventListener('click', () => mode(false));
