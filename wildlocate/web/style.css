@@ -93,6 +93,7 @@ fieldset>label:first-child{margin-top:0}
 .result-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .result-title h2{margin-top:8px}
 .result-title button{white-space:nowrap}
+.result-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
 .metrics{display:flex;flex-wrap:wrap;gap:27px;margin:21px 0 12px}
 .conservation-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:20px}
 .candidate-list{display:grid;gap:8px}
