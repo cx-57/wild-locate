@@ -6,8 +6,10 @@ const fs = require('node:fs');
 async function browser() {
   const nodes = new Map();
   function element() {
+    let value='';
     return {
-      value:'', textContent:'', hidden:false, disabled:false, open:false,
+      get value(){return value;}, set value(next){value=String(next);},
+      textContent:'', hidden:false, disabled:false, open:false,
       className:'', style:{},
       children:[], handlers:{}, firstChild:{textContent:''},
       classList:{toggle(){}},
@@ -186,6 +188,10 @@ test('Partial species search renders state-valid suggestions before training',as
   assert.equal(b.get('training-match').hidden,false);
   assert.match(b.get('training-match').textContent,/American Alligator/);
 });
+
+function textOf(node) {
+  return [node.textContent,...node.children.map(textOf)].join(' ');
+}
 
 const deepDiveReport = {
   analysis_type:'deep_dive',
