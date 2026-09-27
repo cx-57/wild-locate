@@ -215,14 +215,27 @@ const deepDiveReport = {
     contrasts:[{feature:'forest_fraction_1000m',high_habitat_median:.75,low_habitat_median:.3,difference:.45,standardized_difference:1.2}],
   },
   pressures:[{domain:'Development',mean_negative_effect:.04,affected_points:42,affected_percentage:51.85,features:['mean_impervious_1000m']}],
+  protection:{
+    status:'available',
+    high_suitability_samples:2,
+    checked_samples:2,
+    failed_queries:0,
+    intersecting_padus:1,
+    biodiversity_managed:1,
+    not_intersecting_padus:1,
+    samples:[
+      {latitude:42.4,longitude:-72.3,percentile:95,category:'Very High',within_padus:true,biodiversity_managed:true,areas:[{name:'Example Refuge'}]},
+      {latitude:42.3,longitude:-72.2,percentile:70,category:'High',within_padus:false,biodiversity_managed:false,areas:[]},
+    ],
+  },
   scenarios:[{latitude:42.3,longitude:-72.2,current_percentile:50,projected_percentile:68,percentile_delta:18,description:'Reduce impervious surface by 50%',score_delta:.1,changes:[]}],
   points:[
     {latitude:42.4,longitude:-72.3,status:'ok',score:.9,percentile:95,category:'Very High',top_influences:[]},
     {latitude:42.2,longitude:-72.1,status:'ok',score:.2,percentile:18,category:'Very Low',top_influences:[]},
   ],
   data_scope:{
-    connected:['land cover','road context'],
-    not_connected_yet:['protected-area boundaries','historical land-cover change'],
+    connected:['land cover','road context','USGS PAD-US 4.1 protected-area context'],
+    not_connected_yet:['historical land-cover change'],
   },
   limitations:['sampled locations only'],
 };
@@ -262,6 +275,7 @@ test('Conservation Deep Dive opens a separate in-app workspace and preserves the
   assert.match(b.get('deep-dive-title').textContent,/Bobcat/);
   assert.match(textOf(b.get('deep-dive-strengths')),/forest fraction 1 km/i);
   assert.match(textOf(b.get('deep-dive-pressures')),/Development/);
+  assert.match(textOf(b.get('deep-dive-protection')),/Example Refuge/);
   assert.match(textOf(b.get('deep-dive-scenarios')),/18 percentile points/);
 
   b.get('deep-dive-back').click();
