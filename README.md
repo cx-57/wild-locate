@@ -46,6 +46,35 @@ Florida and Arizona use cached national raster tiles that download as needed.
 - Uses target-group background observations, environmental feature extraction, and spatial cross-validation.
 - Stores custom models and enabled-model choices per local account.
 
+## Conservation Deep Dive
+
+A completed habitat assessment can launch a separate **Conservation Deep Dive** workspace. The ordinary assessment stays lightweight; Deep Dive deliberately performs a heavier second-stage analysis over the selected landscape.
+
+For a regional assessment, Deep Dive researches the same 10, 25, or 50 km radius. For a single-point assessment, it expands to a 10 km research area around that point.
+
+The current Deep Dive:
+
+- resamples the landscape at 81 locations with the selected species model;
+- compares the strongest and weakest modeled habitat;
+- aggregates feature interpretations into regional habitat strengths and constraints;
+- groups negative model effects into pressure domains such as development, road exposure, forest structure, water/wetlands, and terrain;
+- identifies the broad landscape sector with the highest mean relative habitat percentile;
+- runs the existing forest-cover / impervious-surface counterfactual scenarios and surfaces the largest modeled responses;
+- provides an **Ask Wild-Locate** research panel whose answers are generated only from the completed Deep Dive report.
+
+Deep Dive keeps model interpretation separate from ecological causation. Feature effects compare the current prediction with a prediction in which one feature is replaced by its comparison median. Pressure domains summarize negative model effects; they are not confirmed threats. Counterfactual scenarios are model experiments, not management recommendations.
+
+### Current data scope
+
+Deep Dive currently uses the same environmental layers available to the species model: land cover, impervious surface, elevation/terrain, water context, and road context.
+
+Two planned research layers are intentionally **not** claimed yet:
+
+- protected-area boundaries / conservation status;
+- historical land-cover or development change.
+
+Those require additional authoritative datasets before Wild-Locate can support protection-status or temporal-threat conclusions.
+
 ## Architecture
 
 ```text
@@ -98,7 +127,7 @@ Set `WILDLOCATE_DATA_DIR` to override that location.
 
 ```bash
 python -m compileall -q wildlocate tests
-python -m unittest discover -s tests -p "test_app.py"
+python -m unittest discover -s tests -p "test_*.py"
 node --check wildlocate/web/app.js
 node --test tests/web_client.test.cjs
 ```
