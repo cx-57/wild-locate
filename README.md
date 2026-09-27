@@ -70,6 +70,8 @@ Drivers compare the current score with a prediction where one feature is replace
 
 JSON exports retain per-point `features`, `insights`, and `restoration`, plus the regional `conservation` summary and interpretation limitations. Each summary candidate has a zero-based `point_index` referencing the original `points` array, including unavailable entries. A null restoration means no positive scenario was found or the calculation failed; consult `insights.error` to distinguish failures. Exported percentiles are relative to the species model's comparison locations; percentile delta is in percentile points.
 
+Regional assessments can also be exported as **GeoJSON** for use in GIS tools such as QGIS or ArcGIS. Each sampled location becomes a Point feature with suitability fields, protection/restoration candidate flags, flattened environmental predictors, and modeled restoration deltas when available. The GeoJSON remains a sampled-point screening product; it does not convert the 81 samples into continuous habitat coverage or parcel-level recommendations.
+
 ## Architecture
 
 ```text
