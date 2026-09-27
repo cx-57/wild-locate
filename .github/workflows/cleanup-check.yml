@@ -1,6 +1,8 @@
 name: cleanup-check
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -32,7 +34,7 @@ jobs:
       - name: Console entry point outside repository
         run: cd /tmp && wildlocate --help
       - name: Python regression tests
-        run: python -m unittest discover -s tests -p "test_app.py"
+        run: python -m unittest discover -s tests -p "test_*.py"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
