@@ -304,6 +304,60 @@ def summarize_conservation(points):
             'restoration_candidates': [candidate(item) for item in restoration[:5]]}
 
 
+def regional_geojson(result):
+    """Convert a completed regional assessment into GIS-friendly GeoJSON."""
+    if result.get('analysis_type') != 'regional':
+        raise ValueError('GeoJSON export is available only for regional assessments.')
+
+    conservation = result.get('conservation') or {}
+    protection_indices = {item['point_index'] for item in conservation.get('protection_candidates', [])}
+    restoration_indices = {item['point_index'] for item in conservation.get('restoration_candidates', [])}
+    features = []
+    for index, point in enumerate(result.get('points', [])):
+        properties = {
+            'point_index': index,
+            'status': point.get('status'),
+            'reason': point.get('reason'),
+            'score': point.get('score'),
+            'percentile': point.get('percentile'),
+            'category': point.get('category'),
+            'protection_candidate': index in protection_indices,
+            'restoration_candidate': index in restoration_indices,
+        }
+        for name, value in (point.get('features') or {}).items():
+            properties[f'environment_{name}'] = value
+        restoration = point.get('restoration')
+        if restoration:
+            properties.update({
+                'restoration_description': restoration.get('description'),
+                'restoration_projected_score': restoration.get('projected_score'),
+                'restoration_score_delta': restoration.get('score_delta'),
+                'restoration_projected_percentile': restoration.get('projected_percentile'),
+                'restoration_percentile_delta': restoration.get('percentile_delta'),
+            })
+        features.append({
+            'type': 'Feature',
+            'geometry': {'type': 'Point', 'coordinates': [point['longitude'], point['latitude']]},
+            'properties': properties,
+        })
+
+    return {
+        'type': 'FeatureCollection',
+        'name': f"Wild-Locate {result.get('species', 'species')} conservation screening",
+        'wildlocate': {
+            'species': result.get('species'),
+            'region': result.get('region'),
+            'center': [result.get('longitude'), result.get('latitude')],
+            'radius_km': result.get('radius_km'),
+            'grid_spacing_km': result.get('grid_spacing_km'),
+            'model': result.get('model'),
+            'training_observations': result.get('training_observations'),
+            'limitations': result.get('limitations', []),
+        },
+        'features': features,
+    }
+
+
 def predict_area(species, latitude, longitude, radius_km, region='MA', *, username=None):
     points = build_grid(latitude, longitude, radius_km)
     region = get_region(region).code
