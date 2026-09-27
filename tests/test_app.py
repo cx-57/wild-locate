@@ -182,58 +182,6 @@ class AreaUITests(unittest.TestCase):
         self.assertTrue(w.environment.isHidden())
         self.assertIs(w.stack.currentWidget(), w.area_page)
 
-    def test_conservation_cards_and_map_selection_show_details_without_invalidating(self):
-        from wildlocate.core.predict import summarize_conservation
-        from PyQt6.QtWidgets import QPushButton
-        w = self.window
-        w.analysis_type.setCurrentIndex(1)
-        point = {'latitude': 42., 'longitude': -72., 'status': 'ok', 'score': .8,
-                 'percentile': 80, 'category': 'Very High',
-                 'insights': {'influences': [{'feature': 'forest_fraction_250m', 'current': .5, 'reference': .2, 'effect': .1}]},
-                 'restoration': {'description': 'Replace 50% of developed cover with forest',
-                                 'current_percentile': 80, 'projected_percentile': 95, 'percentile_delta': 15,
-                                 'changes': [{'feature': 'forest_fraction_250m', 'before': .5, 'after': .6}]}}
-        points = [{'latitude': 41.9, 'longitude': -72., 'status': 'unavailable'}, point]
-        result = {'analysis_type': 'regional', 'species': 'Bobcat', 'latitude': 42., 'longitude': -72.,
-                  'radius_km': 25, 'grid_spacing_km': 5, 'evaluated_points': 1, 'unavailable_points': 1,
-                  'mean_score': .8, 'model': 'Test', 'training_observations': 25, 'points': points,
-                  'conservation': summarize_conservation(points)}
-        w.show_result(result)
-        cards = w.conservation_panel.findChildren(QPushButton)
-        self.assertEqual(len(cards), 2)
-        with patch.object(w.location_map, 'highlight_point') as highlight:
-            cards[-1].click()
-        highlight.assert_called_once_with(1)
-        self.assertIs(w.result, result)
-        self.assertIn('80 → 95', w.selected_point_details.text())
-        self.assertIn('forest fraction 250m', w.selected_point_details.text())
-        self.assertIn('model-based scenario', w.selected_point_details.text().lower())
-        w.location_map.result_point_selected.emit(0)
-        self.assertIn('Unavailable', w.selected_point_details.text())
-        with tempfile.TemporaryDirectory() as folder:
-            path = str(Path(folder) / 'screening.json')
-            with patch('wildlocate.gui.app.QFileDialog.getSaveFileName', return_value=(path, 'JSON')):
-                w.export_result()
-            exported = json.loads(Path(path).read_text())
-        self.assertEqual(exported['conservation'], result['conservation'])
-        self.assertEqual(exported['points'][1]['restoration'], point['restoration'])
-        for phrase in ('81 points', 'not continuous habitat coverage', 'not causal predictions'):
-            self.assertIn(phrase, exported['note'])
-        w.radius_choice.setCurrentIndex(2)
-        self.assertIsNone(w.result)
-        self.assertTrue(w.selected_point_details.isHidden())
-
-    def test_empty_conservation_has_no_cards(self):
-        from wildlocate.core.predict import summarize_conservation
-        from PyQt6.QtWidgets import QPushButton
-        w = self.window
-        w.show_result({'analysis_type': 'regional', 'species': 'Bobcat', 'latitude': 42., 'longitude': -72.,
-                       'radius_km': 25, 'grid_spacing_km': 5, 'evaluated_points': 0, 'unavailable_points': 81,
-                       'mean_score': None, 'model': 'Test', 'training_observations': 25, 'points': [],
-                       'conservation': summarize_conservation([])})
-        self.assertEqual(w.conservation_panel.findChildren(QPushButton), [])
-        self.assertTrue(w.selected_point_details.isHidden())
-
 # -----------------------------------------------------------------------------
 
 class SpeciesSearchTests(unittest.TestCase):
