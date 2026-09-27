@@ -496,6 +496,368 @@ function showResult(data) {
   draw();
 }
 
+function friendlyFeature(name) {
+  return name
+    .replaceAll('_', ' ')
+    .replace(/\b250m\b/g, '250 m')
+    .replace(/\b1000m\b/g, '1 km');
+}
+
+function researchMetric(parent, value, title) {
+  const box = document.createElement('div');
+  box.className = 'research-metric';
+  const strong = document.createElement('strong');
+  strong.textContent = value;
+  const caption = document.createElement('span');
+  caption.textContent = title;
+  box.append(strong, caption);
+  parent.append(box);
+}
+
+function researchRow(parent, title, detail) {
+  const row = document.createElement('div');
+  row.className = 'research-row';
+  const strong = document.createElement('strong');
+  strong.textContent = title;
+  const span = document.createElement('span');
+  span.textContent = detail;
+  row.append(strong, span);
+  parent.append(row);
+}
+
+function initDeepDiveMap() {
+  if (deepDiveMap || !window.L) {
+    if (!window.L) {
+      $('deep-dive-map-status').hidden = false;
+      $('deep-dive-map-status').textContent = 'Map unavailable. The research summary is still usable.';
+    }
+    return;
+  }
+  deepDiveMap = L.map('deep-dive-map', {scrollWheelZoom: false, minZoom: 3, maxZoom: 18})
+    .setView([42.37, -72.28], 9);
+  deepDiveOverlay = L.layerGroup().addTo(deepDiveMap);
+  const tiles = L.tileLayer(
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {
+      maxZoom: 18,
+      noWrap: true,
+      keepBuffer: 0,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }
+  );
+  tiles.on('tileerror', () => {
+    $('deep-dive-map-status').hidden = false;
+    $('deep-dive-map-status').textContent = 'Map tiles are temporarily unavailable. The research summary is still usable.';
+  });
+  tiles.on('load', () => {
+    $('deep-dive-map-status').hidden = true;
+  });
+  tiles.addTo(deepDiveMap);
+}
+
+function drawDeepDiveMap(report) {
+  initDeepDiveMap();
+  if (!deepDiveMap || !deepDiveOverlay) return;
+  deepDiveOverlay.clearLayers();
+  const center = [report.latitude, report.longitude];
+  const circle = L.circle(center, {
+    radius: report.radius_km * 1000,
+    color: '#315b48',
+    weight: 1.3,
+    fillOpacity: 0.018,
+    interactive: false,
+  }).addTo(deepDiveOverlay);
+
+  for (const point of report.points || []) {
+    const ok = point.status === 'ok';
+    const percentile = Number(point.percentile);
+    const color = ok && Number.isFinite(percentile)
+      ? colors[Math.min(4, Math.max(0, Math.floor(percentile / 20)))]
+      : '#858585';
+    const popup = document.createElement('div');
+    popup.textContent = ok
+      ? `${coords(point.latitude, point.longitude)} — ${point.category}, ${point.percentile}th percentile`
+      : `${coords(point.latitude, point.longitude)} — unavailable`;
+    L.circleMarker([point.latitude, point.longitude], {
+      radius: 4.5,
+      color,
+      weight: .8,
+      fillColor: color,
+      fillOpacity: .88,
+      bubblingMouseEvents: false,
+    }).bindPopup(popup).addTo(deepDiveOverlay);
+  }
+  deepDiveMap.fitBounds(circle.getBounds(), {padding: [26, 26], animate: false});
+  setTimeout(() => deepDiveMap && deepDiveMap.invalidateSize({pan: false}), 0);
+}
+
+function appendScope(text, pending = false) {
+  const row = document.createElement('div');
+  row.className = 'scope-row';
+  const dot = document.createElement('span');
+  dot.className = pending ? 'scope-dot pending' : 'scope-dot';
+  const copy = document.createElement('span');
+  copy.textContent = text;
+  row.append(dot, copy);
+  $('deep-dive-scope').append(row);
+}
+
+function renderDeepDive(report) {
+  deepDiveReport = report;
+  $('deep-dive-loading').hidden = true;
+  $('deep-dive-error').hidden = true;
+  $('deep-dive-content').hidden = false;
+  $('deep-dive-title').textContent = `${report.species} · Conservation Deep Dive`;
+  $('deep-dive-meta').textContent =
+    `${report.radius_km} km research radius · ${report.model} · ${Number(report.training_observations || 0).toLocaleString()} training observations`;
+
+  const overview = report.overview || {};
+  const metrics = $('deep-dive-overview');
+  metrics.replaceChildren();
+  researchMetric(metrics, String(overview.evaluated_points ?? 0), 'Samples evaluated');
+  researchMetric(
+    metrics,
+    Number.isFinite(overview.mean_percentile) ? `${Math.round(overview.mean_percentile)}th` : '—',
+    'Mean habitat percentile'
+  );
+  researchMetric(metrics, String(overview.high_suitability_points ?? 0), 'High / very high samples');
+  researchMetric(metrics, String(overview.very_high_suitability_points ?? 0), 'Very high samples');
+
+  const strongest = overview.strongest_point;
+  const sector = overview.strongest_sector;
+  $('deep-dive-overview-copy').textContent = strongest
+    ? `The strongest sampled location reached the ${strongest.percentile}th percentile.` +
+      (sector ? ` At a broader scale, the ${sector.name.toLowerCase()} sector had the highest mean percentile (${Math.round(sector.mean_percentile)}).` : '')
+    : 'No sampled location had enough environmental data for a landscape summary.';
+
+  $('deep-dive-scope').replaceChildren();
+  for (const item of report.data_scope?.connected || []) appendScope(item);
+  for (const item of report.data_scope?.not_connected_yet || []) appendScope(`${item} — not connected yet`, true);
+
+  const strengths = $('deep-dive-strengths');
+  strengths.replaceChildren();
+  for (const row of report.habitat?.strengths || []) {
+    researchRow(
+      strengths,
+      friendlyFeature(row.feature),
+      `Positive model effect across ${row.affected_points} of ${row.points_evaluated} evaluated samples · mean effect +${number(row.mean_effect)}`
+    );
+  }
+  if (!strengths.children.length) researchRow(strengths, 'No consistent regional strength', 'No predictor had a positive mean model effect across the evaluated samples.');
+
+  const constraints = $('deep-dive-constraints');
+  constraints.replaceChildren();
+  for (const row of report.habitat?.constraints || []) {
+    researchRow(
+      constraints,
+      friendlyFeature(row.feature),
+      `Negative model effect across ${row.affected_points} of ${row.points_evaluated} evaluated samples · mean effect ${number(row.mean_effect)}`
+    );
+  }
+  if (!constraints.children.length) researchRow(constraints, 'No consistent regional constraint', 'No predictor had a negative mean model effect across the evaluated samples.');
+
+  const pressures = $('deep-dive-pressures');
+  pressures.replaceChildren();
+  for (const pressure of report.pressures || []) {
+    const card = document.createElement('div');
+    card.className = 'pressure-card';
+    const strong = document.createElement('strong');
+    strong.textContent = pressure.domain;
+    const detail = document.createElement('span');
+    detail.textContent =
+      `${Math.round(pressure.affected_percentage)}% of evaluated samples show a negative model signal in this domain · ${pressure.features.map(friendlyFeature).join(', ')}`;
+    card.append(strong, detail);
+    pressures.append(card);
+  }
+  if (!pressures.children.length) {
+    const card = document.createElement('div');
+    card.className = 'pressure-card';
+    card.textContent = 'No consistent negative pressure domain was detected.';
+    pressures.append(card);
+  }
+
+  const contrasts = $('deep-dive-contrasts');
+  contrasts.replaceChildren();
+  for (const row of report.habitat?.contrasts || []) {
+    const direction = row.difference >= 0 ? 'higher' : 'lower';
+    researchRow(
+      contrasts,
+      friendlyFeature(row.feature),
+      `${direction} in the strongest habitat samples · strong median ${number(row.high_habitat_median)} vs weak median ${number(row.low_habitat_median)}`
+    );
+  }
+  if (!contrasts.children.length) researchRow(contrasts, 'No stable contrast', 'Strong and weak sampled groups did not produce a usable standardized feature contrast.');
+
+  const scenarios = $('deep-dive-scenarios');
+  scenarios.replaceChildren();
+  for (const scenario of report.scenarios || []) {
+    researchRow(
+      scenarios,
+      `+${scenario.percentile_delta} percentile points · ${scenario.current_percentile}th → ${scenario.projected_percentile}th`,
+      `${scenario.description} · ${coords(scenario.latitude, scenario.longitude)}`
+    );
+  }
+  if (!scenarios.children.length) researchRow(scenarios, 'No positive tested scenario', 'The tested forest and impervious-surface counterfactuals did not increase percentile at the sampled locations.');
+
+  $('deep-dive-chat-log').replaceChildren();
+  appendDeepDiveMessage(
+    'assistant',
+    `Deep Dive complete. I can explain the strongest habitat, modeled pressure signals, habitat strengths, or scenario experiments for ${report.species}.`
+  );
+  drawDeepDiveMap(report);
+}
+
+function setDeepDiveBusy(value) {
+  deepDiveBusy = value;
+  $('deep-dive-loading').hidden = !value;
+  $('deep-dive-cancel').disabled = !value || !deepDiveJobId;
+  $('train-species-nav').disabled = value || busy;
+  $('models-nav').disabled = value || busy;
+  if (deepDiveStageTimer) clearInterval(deepDiveStageTimer);
+  deepDiveStageTimer = null;
+  if (value) {
+    const stages = [
+      'Sampling the selected landscape…',
+      'Evaluating species-specific habitat conditions…',
+      'Comparing strong and weak habitat…',
+      'Aggregating modeled pressure signals…',
+      'Testing environmental scenarios…',
+      'Building the research summary…',
+    ];
+    let index = 0;
+    $('deep-dive-loading-stage').textContent = stages[index];
+    deepDiveStageTimer = setInterval(() => {
+      index = Math.min(index + 1, stages.length - 1);
+      $('deep-dive-loading-stage').textContent = stages[index];
+    }, 1700);
+  }
+}
+
+async function pollDeepDive(id, version) {
+  if (deepDiveJobId !== id || deepDiveRevision !== version) return;
+  try {
+    const job = await api(`/api/deep-dives/${id}`);
+    if (deepDiveJobId !== id || deepDiveRevision !== version) return;
+    if (job.status === 'running') {
+      setTimeout(() => pollDeepDive(id, version), 700);
+      return;
+    }
+    setDeepDiveBusy(false);
+    if (job.status === 'complete') {
+      renderDeepDive(job.result);
+    } else if (job.status === 'cancelled') {
+      $('deep-dive-loading').hidden = true;
+      $('deep-dive-error').textContent = 'Deep Dive cancelled. Your original habitat assessment is unchanged.';
+      $('deep-dive-error').hidden = false;
+    } else {
+      $('deep-dive-loading').hidden = true;
+      $('deep-dive-error').textContent = job.error || 'The Deep Dive could not be completed.';
+      $('deep-dive-error').hidden = false;
+    }
+  } catch (exc) {
+    if (deepDiveJobId !== id || deepDiveRevision !== version) return;
+    if (exc.status && exc.status < 500) {
+      setDeepDiveBusy(false);
+      $('deep-dive-loading').hidden = true;
+      $('deep-dive-error').textContent = exc.message;
+      $('deep-dive-error').hidden = false;
+      return;
+    }
+    $('deep-dive-loading-stage').textContent = 'Connection interrupted. Retrying the Deep Dive…';
+    setTimeout(() => pollDeepDive(id, version), 2000);
+  }
+}
+
+async function startDeepDive() {
+  if (!result || deepDiveBusy) return;
+  const radius = result.analysis_type === 'regional' ? result.radius_km : 10;
+  const request = {
+    species: result.species,
+    region: result.region || $('region').value,
+    latitude: result.latitude,
+    longitude: result.longitude,
+    radius_km: radius,
+  };
+
+  deepDiveRevision += 1;
+  const version = deepDiveRevision;
+  deepDiveReport = null;
+  deepDiveJobId = null;
+  $('deep-dive-content').hidden = true;
+  $('deep-dive-error').hidden = true;
+  $('deep-dive-title').textContent = `${result.species} · Conservation Deep Dive`;
+  $('deep-dive-meta').textContent =
+    `${radius} km research radius · derived from your completed ${result.analysis_type === 'regional' ? 'regional' : 'point'} habitat assessment`;
+  showSection('deep-dive');
+  setDeepDiveBusy(true);
+
+  try {
+    const job = await api('/api/deep-dives', request);
+    deepDiveJobId = job.id;
+    $('deep-dive-cancel').disabled = false;
+    pollDeepDive(job.id, version);
+  } catch (exc) {
+    setDeepDiveBusy(false);
+    $('deep-dive-loading').hidden = true;
+    $('deep-dive-error').textContent = exc.message;
+    $('deep-dive-error').hidden = false;
+  }
+}
+
+async function cancelDeepDive() {
+  if (!deepDiveJobId || !deepDiveBusy) return;
+  const id = deepDiveJobId;
+  $('deep-dive-cancel').disabled = true;
+  try {
+    await api(`/api/deep-dives/${id}/cancel`, {});
+    if (deepDiveJobId !== id) return;
+    deepDiveRevision += 1;
+    setDeepDiveBusy(false);
+    $('deep-dive-loading').hidden = true;
+    $('deep-dive-error').textContent = 'Deep Dive cancelled. Your original habitat assessment is unchanged.';
+    $('deep-dive-error').hidden = false;
+  } catch (exc) {
+    $('deep-dive-error').textContent = `Could not cancel: ${exc.message}`;
+    $('deep-dive-error').hidden = false;
+    $('deep-dive-cancel').disabled = false;
+  }
+}
+
+function appendDeepDiveMessage(role, text) {
+  const message = document.createElement('div');
+  message.className = `chat-message ${role}`;
+  message.textContent = text;
+  $('deep-dive-chat-log').append(message);
+}
+
+async function askDeepDive(question) {
+  const text = String(question || '').trim();
+  if (!text || !deepDiveJobId || !deepDiveReport) return;
+  appendDeepDiveMessage('user', text);
+  $('deep-dive-question').value = '';
+  $('deep-dive-ask').disabled = true;
+  try {
+    const response = await api(`/api/deep-dives/${deepDiveJobId}/ask`, {question: text});
+    appendDeepDiveMessage('assistant', response.answer);
+  } catch (exc) {
+    appendDeepDiveMessage('assistant', `I couldn't answer that from this Deep Dive: ${exc.message}`);
+  } finally {
+    $('deep-dive-ask').disabled = false;
+  }
+}
+
+$('deep-dive-launch').addEventListener('click', startDeepDive);
+$('deep-dive-back').addEventListener('click', () => showSection('explore'));
+$('deep-dive-cancel').addEventListener('click', cancelDeepDive);
+$('deep-dive-chat-form').addEventListener('submit', event => {
+  event.preventDefault();
+  askDeepDive($('deep-dive-question').value);
+});
+$('deep-q-strengths').addEventListener('click', () => askDeepDive('What helps this habitat?'));
+$('deep-q-pressures').addEventListener('click', () => askDeepDive('What is the biggest pressure?'));
+$('deep-q-where').addEventListener('click', () => askDeepDive('Where is habitat strongest?'));
+$('deep-q-scenarios').addEventListener('click', () => askDeepDive('What scenario changed the model most?'));
+
 async function poll(id, version) {
   if (activeJob !== id || revision !== version) return;
   try {
