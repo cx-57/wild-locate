@@ -12,6 +12,7 @@ from collections import defaultdict
 import numpy as np
 
 from wildlocate.core.environment import extract_features
+from wildlocate.core.protection import analyze_protection_context
 from wildlocate.core.predict import (
     build_grid,
     build_prediction_frame,
@@ -330,6 +331,25 @@ def analyze_deep_dive(species, latitude, longitude, radius_km, region="MA", *, u
     summary = summarize_deep_dive(
         points, predictors, latitude, longitude
     )
+    try:
+        protection = analyze_protection_context(points)
+    except Exception:
+        protection = {
+            "status": "unavailable",
+            "source": "USGS Protected Areas Database of the United States (PAD-US) 4.1",
+            "high_suitability_samples": sum(
+                point.get("status") == "ok" and point.get("percentile", -1) >= 60
+                for point in points
+            ),
+            "checked_samples": 0,
+            "failed_queries": 0,
+            "intersecting_padus": 0,
+            "biodiversity_managed": 0,
+            "not_intersecting_padus": 0,
+            "samples": [],
+            "message": "PAD-US protection context could not be retrieved.",
+        }
+
     public_points = []
     for point in points:
         public = {
@@ -360,6 +380,7 @@ def analyze_deep_dive(species, latitude, longitude, radius_km, region="MA", *, u
         "unavailable_points": len(points) - summary["overview"]["evaluated_points"],
         "points": public_points,
         **summary,
+        "protection": protection,
         "data_scope": {
             "predictors": list(predictors),
             "connected": [
@@ -369,9 +390,12 @@ def analyze_deep_dive(species, latitude, longitude, radius_km, region="MA", *, u
                 "terrain/elevation",
                 "water context",
                 "road context",
-            ],
+            ] + (
+                ["USGS PAD-US 4.1 protected-area context"]
+                if protection.get("status") in {"available", "partial"}
+                else []
+            ),
             "not_connected_yet": [
-                "protected-area boundaries",
                 "historical land-cover change",
             ],
         },
@@ -380,7 +404,8 @@ def analyze_deep_dive(species, latitude, longitude, radius_km, region="MA", *, u
             "Feature effects are model interpretations relative to comparison medians, not causal ecological effects.",
             "Pressure signals summarize negative model effects and should not be treated as confirmed threats without ecological validation.",
             "Counterfactual scenarios are model experiments, not management recommendations.",
-            "Protected-area status and historical land-cover change are not included in this version.",
+            "PAD-US results are point-overlap checks on high-suitability samples, not protected-area acreage estimates; a sample outside PAD-US is not automatically unprotected.",
+            "Historical land-cover change is not included in this version.",
         ],
     }
 
@@ -398,6 +423,19 @@ def answer_deep_dive_question(report, question):
     habitat = report.get("habitat", {})
     pressures = report.get("pressures", [])
     scenarios = report.get("scenarios", [])
+    protection = report.get("protection", {})
+
+    if any(word in lowered for word in ("protect", "pad-us", "padus", "managed land", "conservation land")):
+        if protection.get("status") == "unavailable":
+            return "PAD-US protection context was unavailable for this Deep Dive, so Wild-Locate cannot make a protection-overlap statement for this run."
+        checked = protection.get("checked_samples", 0)
+        intersecting = protection.get("intersecting_padus", 0)
+        biodiversity = protection.get("biodiversity_managed", 0)
+        return (
+            f"Wild-Locate checked {checked} high-suitability sampled locations against USGS PAD-US 4.1. "
+            f"{intersecting} intersect a PAD-US managed/protected-area record, and {biodiversity} intersect records with GAP Status 1 or 2 biodiversity-management intent. "
+            "These are sampled point overlaps, not protected-area acreage estimates; a point outside PAD-US is not automatically unprotected."
+        )
 
     if any(word in lowered for word in ("threat", "pressure", "risk", "weak")):
         if not pressures:
