@@ -71,6 +71,33 @@ def _compact_point(point):
     }
 
 
+def _ordinal(value):
+    value = int(round(value))
+    if 10 < value % 100 < 14:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(value % 10, "th")
+    return f"{value}{suffix}"
+
+
+def _connected_layers(predictors, protection_status):
+    lowered = [name.casefold() for name in predictors]
+    layers = ["species occurrence data"]
+    if any(any(term in name for term in ("forest", "wetland", "developed", "open_water", "landcover")) for name in lowered):
+        layers.append("land cover")
+    if any("impervious" in name for name in lowered):
+        layers.append("impervious surface")
+    if any(any(term in name for term in ("elevation", "slope", "terrain", "rugged")) for name in lowered):
+        layers.append("terrain/elevation")
+    if any(any(term in name for term in ("water", "wetland", "hydro")) for name in lowered):
+        layers.append("water context")
+    if any("road" in name for name in lowered):
+        layers.append("road context")
+    if protection_status in {"available", "partial"}:
+        layers.append("USGS PAD-US 4.1 protected-area context")
+    return layers
+
+
 def summarize_deep_dive(points, predictors, center_latitude, center_longitude):
     """Summarize already-scored Deep Dive sample points.
 
@@ -383,18 +410,7 @@ def analyze_deep_dive(species, latitude, longitude, radius_km, region="MA", *, u
         "protection": protection,
         "data_scope": {
             "predictors": list(predictors),
-            "connected": [
-                "species occurrence data",
-                "land cover",
-                "impervious surface",
-                "terrain/elevation",
-                "water context",
-                "road context",
-            ] + (
-                ["USGS PAD-US 4.1 protected-area context"]
-                if protection.get("status") in {"available", "partial"}
-                else []
-            ),
+            "connected": _connected_layers(predictors, protection.get("status")),
             "not_connected_yet": [
                 "historical land-cover change",
             ],
@@ -466,7 +482,7 @@ def answer_deep_dive_question(report, question):
             f"The largest tested model response is near "
             f"{abs(top['latitude']):.4f}° {'N' if top['latitude'] >= 0 else 'S'}, "
             f"{abs(top['longitude']):.4f}° {'E' if top['longitude'] >= 0 else 'W'}: "
-            f"{top['current_percentile']}th to {top['projected_percentile']}th percentile "
+            f"{_ordinal(top['current_percentile'])} to {_ordinal(top['projected_percentile'])} percentile "
             f"under the scenario '{top['description']}'. This is a counterfactual model experiment, not a recommended intervention."
         )
 
