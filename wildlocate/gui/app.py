@@ -433,6 +433,12 @@ class MapBridge(QObject):
     ready = pyqtSignal()
     selected = pyqtSignal(float, float)
     tile_status = pyqtSignal(bool)
+    result_point_selected = pyqtSignal(int)
+
+    @pyqtSlot(int)
+    def selectResultPoint(self, index):
+        if index >= 0:
+            self.result_point_selected.emit(index)
 
     @pyqtSlot()
     def mapReady(self):
@@ -460,6 +466,7 @@ if QWebEngineView is not None:
 
 class LocationMap(QWidget):
     location_selected = pyqtSignal(float, float)
+    result_point_selected = pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -495,6 +502,7 @@ class LocationMap(QWidget):
         self.page.setWebChannel(self.channel)
         self.bridge.ready.connect(self.map_ready)
         self.bridge.selected.connect(self.select_location)
+        self.bridge.result_point_selected.connect(self.result_point_selected.emit)
         self.bridge.tile_status.connect(self.tile_status)
         self.view.loadFinished.connect(self.loaded)
         self.view.renderProcessTerminated.connect(self.render_failed)
@@ -537,6 +545,10 @@ class LocationMap(QWidget):
         self._radius_km = radius_km
         self._area_points = points or []
         self.send_state()
+
+    def highlight_point(self, index):
+        if self._ready and 0 <= index < len(self._area_points):
+            self.page.runJavaScript(f'window.highlightResultPoint({int(index)});')
 
     def send_state(self, *, recenter=False):
         self._pending_recenter = self._pending_recenter or recenter
@@ -1300,6 +1312,7 @@ class MainWindow(QMainWindow):
             field.editingFinished.connect(lambda: self.sync_map(recenter=True))
             field.returnPressed.connect(self.analyze)
         self.location_map.location_selected.connect(self.map_selected)
+        self.location_map.result_point_selected.connect(lambda index: self.select_area_point(index, zoom=False))
         self.sync_map()
         self.shortcut = QShortcut(QKeySequence("Ctrl+Return"), self)
         self.shortcut.activated.connect(self.analyze)
@@ -1539,6 +1552,17 @@ class MainWindow(QMainWindow):
             legend.addWidget(key)
         legend.addStretch()
         area_layout.addLayout(legend)
+        self.conservation_panel = QWidget()
+        self.conservation_layout = QVBoxLayout(self.conservation_panel)
+        self.conservation_layout.setContentsMargins(0, 0, 0, 0)
+        self.conservation_cards = []
+        area_layout.addWidget(self.conservation_panel)
+        self.conservation_panel.hide()
+        self.selected_point_details = label('', 'muted', True)
+        self.selected_point_details.setTextFormat(Qt.TextFormat.PlainText)
+        self.selected_point_details.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        area_layout.addWidget(self.selected_point_details)
+        self.selected_point_details.hide()
         self.area_details = Disclosure("View all scores", "coordinates")
         self.area_details.body_layout.setContentsMargins(0, 8, 0, 0)
         self.area_table = QTableWidget(0, 5)
@@ -1551,6 +1575,7 @@ class MainWindow(QMainWindow):
         self.area_table.setShowGrid(False)
         self.area_table.setAlternatingRowColors(True)
         self.area_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.area_table.cellClicked.connect(lambda row, _: self.select_area_point(row))
         self.area_table.setFrameShape(QFrame.Shape.NoFrame)
         self.area_table.verticalHeader().setDefaultSectionSize(26)
         self.area_table.verticalHeader().setMinimumSectionSize(24)
@@ -1690,6 +1715,7 @@ class MainWindow(QMainWindow):
             field.style().polish(field)
         if self.result is not None:
             self.result = None
+            self.selected_point_details.hide()
             self.stack.setCurrentWidget(self.empty_page)
             self.environment.hide()
             self.insights.hide()
@@ -1839,6 +1865,8 @@ class MainWindow(QMainWindow):
                     item.setToolTip(point.get('reason', 'Environmental data unavailable'))
                 self.area_table.setItem(row, col, item)
         self.area_table.resizeColumnsToContents()
+        self.show_conservation(result)
+        self.selected_point_details.hide()
         self.stack.setCurrentWidget(self.area_page)
         self.fit_result_height()
         self.environment.hide()
@@ -1846,7 +1874,96 @@ class MainWindow(QMainWindow):
         self.export_button.show()
         self.result_status.setText("REGIONAL ASSESSMENT COMPLETE" if result['evaluated_points'] else "NO COVERAGE")
         self.location_map.set_area(result['radius_km'], result['points'])
-        self.input_note.setText("Select a map point to see its score.")
+        self.input_note.setText("Select a map point or candidate to see its suitability, drivers and model-based scenario.")
+
+    def show_conservation(self, result):
+        while self.conservation_layout.count():
+            widget = self.conservation_layout.takeAt(0).widget()
+            if widget:
+                widget.setParent(None)
+                widget.deleteLater()
+        self.conservation_cards = []
+        summary = result.get('conservation')
+        self.conservation_panel.setVisible(bool(summary))
+        if not summary:
+            return
+        layout = self.conservation_layout
+        layout.addWidget(label('Conservation Screening', 'heading', True))
+        layout.addWidget(label('Each listed location is a candidate for further investigation, not a recommendation. Distribution describes sampled locations, not habitat area.', 'muted', True))
+        distribution = ' · '.join(f"{category}: {bucket['count']} ({bucket['percentage']:.1f}%)"
+                                  for category, bucket in summary['habitat_distribution'].items())
+        layout.addWidget(label('Habitat distribution\n' + distribution, 'muted', True))
+        for key, heading, empty in (
+            ('protection_candidates', 'Top existing high-suitability locations', 'No high-suitability candidates among evaluated samples.'),
+            ('restoration_candidates', 'Top modeled restoration opportunities', 'No positive percentile improvements found among evaluated model-based scenarios.'),
+        ):
+            layout.addWidget(label(heading, 'fieldLabel', True))
+            for candidate in summary[key]:
+                index = candidate['point_index']
+                lines = [coordinates(candidate['latitude'], candidate['longitude'])]
+                if key == 'restoration_candidates':
+                    scenario = candidate['restoration']
+                    lines += [f"Percentile {scenario['current_percentile']} → {scenario['projected_percentile']} (+{scenario['percentile_delta']} percentile points)",
+                              f"Model-based scenario: {scenario['description']}"]
+                else:
+                    lines.append(f"{candidate['category']} · percentile {candidate['percentile']}")
+                lines.append('Candidate for further investigation')
+                card = QPushButton()
+                card.setCheckable(True)
+                card.setAccessibleName('. '.join(lines))
+                card.setStyleSheet('QPushButton { text-align: left; border: 1px solid #d5dfce; border-radius: 6px; background: #f5f6f0; } QPushButton:checked { border: 2px solid #315b48; background: #e8efdf; }')
+                card_layout = QVBoxLayout(card)
+                copy = label('\n'.join(lines), 'muted', True)
+                copy.setTextFormat(Qt.TextFormat.PlainText)
+                copy.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+                card_layout.addWidget(copy)
+                card.clicked.connect(lambda checked=False, index=index: self.select_area_point(index))
+                self.conservation_cards.append((index, card))
+                layout.addWidget(card)
+            if not summary[key]:
+                layout.addWidget(label(empty, 'muted', True))
+        failed = sum(bool(p.get('insights', {}).get('error')) for p in result['points'] if p['status'] == 'ok')
+        if failed:
+            layout.addWidget(label(f'Scenarios unavailable for {failed} scored locations; screening is incomplete.', 'muted', True))
+        layout.addWidget(label('Restoration scenarios are counterfactual ML outputs, not causal predictions. The 81 points are sampled locations, not continuous habitat coverage.', 'notice', True))
+
+    def select_area_point(self, index, *, zoom=True):
+        if not self.result or self.result.get('analysis_type') != 'regional':
+            return
+        points = self.result['points']
+        if not 0 <= index < len(points):
+            return
+        point = points[index]
+        for candidate_index, card in self.conservation_cards:
+            card.setChecked(candidate_index == index)
+        if zoom:
+            self.location_map.highlight_point(index)
+        lines = [f"Sampled location · {coordinates(point['latitude'], point['longitude'])}"]
+        if point['status'] != 'ok':
+            lines.append(point.get('reason', 'Unavailable: outside coverage or incomplete environmental data.'))
+        else:
+            lines.append(f"{point['category']} · current suitability {point['score']:.3f} · percentile {point['percentile']}")
+            insights = point.get('insights', {})
+            if insights.get('error'):
+                lines.append(insights['error'])
+            else:
+                lines.append('\nMajor environmental drivers')
+                influences = insights.get('influences', [])[:3]
+                for driver in influences:
+                    lines.append(f"{driver['feature'].replace('_', ' ')}: {driver['current']:.3f}; comparison median {driver['reference']:.3f}; score difference {driver['effect']:+.3f}")
+                lines.append('Each difference compares the current model score with that feature set to its comparison median. These are separate model comparisons, not causal effects.' if influences else 'Environmental drivers are unavailable for this assessment.')
+                lines.append('\nBest model-based restoration scenario')
+                scenario = point.get('restoration')
+                if scenario:
+                    lines += [scenario['description'], f"Percentile {scenario['current_percentile']} → {scenario['projected_percentile']} (+{scenario['percentile_delta']} percentile points)"]
+                    for change in scenario['changes']:
+                        lines.append(f"{change['feature'].replace('_', ' ')}: {change['before']:.3f} → {change['after']:.3f}")
+                    lines.append('Model-based scenario; a candidate for further investigation. Counterfactual ML outputs are not causal predictions.')
+                else:
+                    lines.append('No positive modeled restoration scenario found in the tested changes. This does not rule out restoration potential.')
+        self.selected_point_details.setText('\n'.join(lines))
+        self.selected_point_details.show()
+        self.fit_result_height()
 
     def show_insights(self, insights):
         while self.insights.body_layout.count():
@@ -1883,6 +2000,8 @@ class MainWindow(QMainWindow):
         payload = dict(self.result)
         payload["interpretation"] = self.interpretation.text()
         payload["note"] = "The suitability score is relative and does not represent the probability that the species is currently present."
+        if self.result.get('analysis_type') == 'regional':
+            payload['note'] += ' The 81 points are sampled locations, not continuous habitat coverage. Restoration scenarios are counterfactual ML outputs, not causal predictions. Each candidate requires further investigation.'
         file = QSaveFile(path)
         data = (json.dumps(payload, indent=2, allow_nan=False) + "\n").encode("utf-8")
         if not file.open(QIODevice.OpenModeFlag.WriteOnly) or file.write(data) != len(data) or not file.commit():

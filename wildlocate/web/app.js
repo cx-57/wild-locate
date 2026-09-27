@@ -13,6 +13,9 @@ let started = 0;
 let elapsedTimer = null;
 let map = null;
 let overlay = null;
+const pointMarkers = new Map();
+let selectedPointIndex = null;
+let candidateButtons = [];
 let authCreate = false;
 
 let managerRegion = 'MA';
@@ -282,6 +285,11 @@ function clearResult() {
   $('scores').open = false;
   $('conditions').open = false;
   $('point-percentile').hidden = true;
+  $('conservation').hidden = true;
+  $('selected-point').hidden = true;
+  selectedPointIndex = null;
+  candidateButtons = [];
+  pointMarkers.clear();
   error('');
 }
 
@@ -299,6 +307,7 @@ function draw(recenter = false) {
   $('selected-location').textContent = valid ? coords(lat, lon) : 'Enter valid coordinates';
   if (!map) return;
   overlay.clearLayers();
+  pointMarkers.clear();
   if (!valid || Math.abs(lat) > 85) return;
 
   const center = [lat, lon];
@@ -328,7 +337,7 @@ function draw(recenter = false) {
     }).addTo(overlay);
   }
 
-  for (const point of points) {
+  for (const [index, point] of points.entries()) {
     const ok = point.status === 'ok';
     const percentile = Number(point.percentile);
     const color = ok && Number.isFinite(percentile)
@@ -340,7 +349,7 @@ function draw(recenter = false) {
       (ok
         ? `${point.category} · score ${number(point.score)} · percentile ${point.percentile}`
         : 'Unavailable: outside coverage or incomplete data');
-    L.circleMarker([point.latitude, point.longitude], {
+    const marker = L.circleMarker([point.latitude, point.longitude], {
       radius: regional ? 4 : 7,
       color,
       weight: 0.6,
@@ -348,6 +357,105 @@ function draw(recenter = false) {
       fillOpacity: 0.85,
       bubblingMouseEvents: false,
     }).bindPopup(popup).addTo(overlay);
+    pointMarkers.set(index, marker);
+    if (result?.analysis_type === 'regional') {
+      marker.on('click', () => selectResultPoint(index, false));
+    }
+  }
+}
+
+function appendText(parent, tag, value) {
+  const element = document.createElement(tag);
+  element.textContent = value;
+  parent.append(element);
+  return element;
+}
+
+function showConservation(data) {
+  const summary = data.conservation;
+  $('conservation').hidden = data.analysis_type !== 'regional' || !summary;
+  $('selected-point').hidden = true;
+  selectedPointIndex = null;
+  candidateButtons = [];
+  $('habitat-distribution').replaceChildren();
+  $('protection-candidates').replaceChildren();
+  $('restoration-candidates').replaceChildren();
+  if ($('conservation').hidden) return;
+  for (const [category, bucket] of Object.entries(summary.habitat_distribution)) {
+    appendText($('habitat-distribution'), 'span', `${category}: ${bucket.count} (${bucket.percentage.toFixed(1)}%)`);
+  }
+  for (const [key, id, empty] of [
+    ['protection_candidates', 'protection-candidates', 'No high-suitability candidates among evaluated samples.'],
+    ['restoration_candidates', 'restoration-candidates', 'No positive percentile improvements found among evaluated model-based scenarios.'],
+  ]) {
+    const container = $(id);
+    for (const candidate of summary[key]) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'candidate-card';
+      card.setAttribute('aria-pressed', 'false');
+      appendText(card, 'strong', coords(candidate.latitude, candidate.longitude));
+      if (key === 'restoration_candidates') {
+        const scenario = candidate.restoration;
+        appendText(card, 'span', `Percentile ${scenario.current_percentile} → ${scenario.projected_percentile} (+${scenario.percentile_delta} percentile points)`);
+        appendText(card, 'span', `Model-based scenario: ${scenario.description}`);
+      } else {
+        appendText(card, 'span', `${candidate.category} · percentile ${candidate.percentile}`);
+      }
+      appendText(card, 'span', 'Candidate for further investigation');
+      card.addEventListener('click', () => selectResultPoint(candidate.point_index));
+      candidateButtons.push({card, index: candidate.point_index});
+      container.append(card);
+    }
+    if (!summary[key].length) appendText(container, 'p', empty);
+  }
+  const failed = (data.points || []).filter(point => point.status === 'ok' && point.insights?.error).length;
+  if (failed) appendText($('restoration-candidates'), 'p', `Scenarios unavailable for ${failed} scored locations; screening is incomplete.`);
+}
+
+function selectResultPoint(index, zoom = true) {
+  const point = result?.points?.[index];
+  if (!point) return;
+  if (selectedPointIndex !== null) pointMarkers.get(selectedPointIndex)?.setStyle({weight: .6, radius: 4});
+  selectedPointIndex = index;
+  for (const item of candidateButtons) item.card.setAttribute('aria-pressed', String(item.index === index));
+  const marker = pointMarkers.get(index);
+  if (marker && map) {
+    marker.setStyle({weight: 3, radius: 8});
+    if (zoom) map.setView([point.latitude, point.longitude], Math.max(map.getZoom(), 12), {animate: false});
+    marker.openPopup();
+  }
+  const panel = $('selected-point');
+  panel.replaceChildren();
+  panel.hidden = false;
+  appendText(panel, 'h3', `Sampled location · ${coords(point.latitude, point.longitude)}`);
+  if (point.status !== 'ok') {
+    appendText(panel, 'p', point.reason || 'Unavailable: outside coverage or incomplete environmental data.');
+    return;
+  }
+  appendText(panel, 'p', `${point.category} · current suitability ${number(point.score)} · percentile ${point.percentile}`);
+  if (point.insights?.error) {
+    appendText(panel, 'p', point.insights.error);
+    return;
+  }
+  appendText(panel, 'h4', 'Major environmental drivers');
+  const influences = (point.insights?.influences || []).slice(0, 3);
+  for (const driver of influences) {
+    appendText(panel, 'p', `${driver.feature.replaceAll('_', ' ')}: ${number(driver.current)}; comparison median ${number(driver.reference)}; score difference ${driver.effect >= 0 ? '+' : ''}${number(driver.effect)}`);
+  }
+  appendText(panel, 'p', influences.length
+    ? 'Each score difference compares the current model score with that feature set to its comparison median. These are separate model comparisons, not causal effects.'
+    : 'Environmental drivers are unavailable for this assessment.');
+  const scenario = point.restoration;
+  appendText(panel, 'h4', 'Best model-based restoration scenario');
+  if (scenario) {
+    appendText(panel, 'p', `${scenario.description}\nPercentile ${scenario.current_percentile} → ${scenario.projected_percentile} (+${scenario.percentile_delta} percentile points)`);
+    for (const change of scenario.changes) {
+      appendText(panel, 'p', `${change.feature.replaceAll('_', ' ')}: ${number(change.before)} → ${number(change.after)}`);
+    }
+    appendText(panel, 'p', 'Model-based scenario; a candidate for further investigation. Counterfactual ML outputs are not causal predictions.');
+  } else {
+    appendText(panel, 'p', 'No positive modeled restoration scenario found in the tested changes. This does not rule out restoration potential.');
   }
 }
 
@@ -408,6 +516,7 @@ function metric(value, title) {
 function showResult(data) {
   result = data;
   const area = data.analysis_type === 'regional';
+  showConservation(data);
   $('empty').hidden = true;
   $('result').hidden = false;
   $('result-kind').textContent = area ? 'REGIONAL ASSESSMENT' : 'POINT ASSESSMENT';
@@ -568,7 +677,10 @@ $('export').addEventListener('click', () => {
   if (!result) return;
   const payload = {
     ...result,
-    note: 'Suitability is relative, not a probability of species presence.',
+    note: 'Suitability is relative, not a probability of species presence.' +
+      (result.analysis_type === 'regional'
+        ? ' The 81 points are sampled locations, not continuous habitat coverage. Restoration scenarios are counterfactual ML outputs, not causal predictions. Each candidate requires further investigation.'
+        : ''),
   };
   const url = URL.createObjectURL(
     new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'})

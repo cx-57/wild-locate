@@ -94,6 +94,14 @@ fieldset>label:first-child{margin-top:0}
 .result-title h2{margin-top:8px}
 .result-title button{white-space:nowrap}
 .metrics{display:flex;flex-wrap:wrap;gap:27px;margin:21px 0 12px}
+.conservation-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:20px}
+.candidate-list{display:grid;gap:8px}
+.candidate-card{display:block;width:100%;text-align:left;white-space:normal;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);cursor:pointer}
+.candidate-card strong,.candidate-card span{display:block;margin-bottom:5px}
+.candidate-card:hover,.candidate-card[aria-pressed="true"]{border-color:#315b48;background:#e8efdf}
+.candidate-card:focus-visible{outline:2px solid #315b48;outline-offset:2px}
+.selected-point{margin:20px 0;padding:16px;border:1px solid var(--line);border-radius:8px}
+.selected-point p{white-space:pre-line}
 .metric strong{display:block;font-size:23px;font-weight:500;letter-spacing:-.7px}
 .metric span{display:block;font-size:10px;color:var(--muted);margin-top:4px}
 

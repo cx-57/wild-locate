@@ -46,6 +46,30 @@ Florida and Arizona use cached national raster tiles that download as needed.
 - Uses target-group background observations, environmental feature extraction, and spatial cross-validation.
 - Stores custom models and enabled-model choices per local account.
 
+## Conservation screening
+
+Regional analysis includes **Conservation Screening** in both the browser and desktop interfaces. It asks where habitat already scores strongly and where the model indicates the greatest restoration potential among the sampled locations.
+
+- **Habitat distribution:** counts and percentages by suitability category, excluding unavailable points. Percentages describe evaluated samples, not land area.
+- **Existing high-suitability locations:** up to five High or Very High locations (current percentile at least 60), ranked by current percentile. If no samples qualify, the list is empty.
+- **Modeled restoration opportunities:** up to five locations ranked by positive percentile improvement. Ties retain sampled-point order. No weighted conservation score is used.
+
+Select a candidate card or map point to view its current suitability, major environmental drivers, and best model-based restoration scenario, including changed variables and current → projected percentile. Selecting a candidate highlights the existing point and zooms the map without changing the analysis center.
+
+The scenario search reuses the measured feature frame. It tests replacing 10%, 25%, or 50% of developed cover with forest, or reducing impervious surface by those proportions, at the supported 250 m and 1000 m scales. It preserves the existing point-analysis search: retain the largest score gain per scenario type, with a minimum score gain of 0.001. The regional best scenario is chosen by projected percentile, then score gain. A score gain without a percentile gain can appear in point details but does not qualify for the restoration ranking. Missing scenario features or no positive tested changes produce no scenario; calculation failures are reported separately while preserving valid suitability scores.
+
+Drivers compare the current score with a prediction where one feature is replaced by its comparison median. These separate comparisons do not add up to the score and are not causal effects.
+
+**Interpretation limits:**
+
+- Suitability is not presence probability.
+- The **81 points are sampled locations, not continuous habitat coverage**. Missing environmental coverage can further reduce the evaluated sample.
+- Restoration scenarios are **counterfactual ML outputs, not causal predictions**. They do not establish intervention feasibility, ecological outcomes, ownership, cost, or conservation priority. Changed feature combinations may be outside the conditions represented in training data.
+- Each listed location is a **candidate for further investigation**, not a recommendation. An empty restoration list does not establish that restoration is impossible.
+- This screening does not identify habitat patches or corridors.
+
+JSON exports retain per-point `features`, `insights`, and `restoration`, plus the regional `conservation` summary and interpretation limitations. Each summary candidate has a zero-based `point_index` referencing the original `points` array, including unavailable entries. A null restoration means no positive scenario was found or the calculation failed; consult `insights.error` to distinguish failures. Exported percentiles are relative to the species model's comparison locations; percentile delta is in percentile points.
+
 ## Architecture
 
 ```text
@@ -98,7 +122,7 @@ Set `WILDLOCATE_DATA_DIR` to override that location.
 
 ```bash
 python -m compileall -q wildlocate tests
-python -m unittest discover -s tests -p "test_app.py"
+python -m unittest discover -s tests -p "test_*.py"
 node --check wildlocate/web/app.js
 node --test tests/web_client.test.cjs
 ```
