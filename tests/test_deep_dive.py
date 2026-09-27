@@ -130,14 +130,27 @@ class DeepDiveAnalysisTests(unittest.TestCase):
                  "presence_count": 405,
              })), \
              patch.object(deep_dive, "load_comparison_scores", return_value=(scores, comparison)), \
-             patch.object(deep_dive, "extract_features", side_effect=extract):
+             patch.object(deep_dive, "extract_features", side_effect=extract), \
+             patch.object(deep_dive, "analyze_protection_context", return_value={
+                 "status": "available",
+                 "source": "USGS PAD-US 4.1",
+                 "high_suitability_samples": 2,
+                 "checked_samples": 2,
+                 "failed_queries": 0,
+                 "intersecting_padus": 1,
+                 "biodiversity_managed": 1,
+                 "not_intersecting_padus": 1,
+                 "samples": [],
+             }):
             report = deep_dive.analyze_deep_dive("Bobcat", 42, -72, 10)
 
         self.assertEqual(report["analysis_type"], "deep_dive")
         self.assertEqual(report["species"], "Bobcat")
         self.assertEqual(report["sample_points"], 4)
         self.assertEqual(report["overview"]["evaluated_points"], 4)
-        self.assertIn("protected-area boundaries", report["data_scope"]["not_connected_yet"])
+        self.assertIn("USGS PAD-US 4.1 protected-area context", report["data_scope"]["connected"])
+        self.assertIn("historical land-cover change", report["data_scope"]["not_connected_yet"])
+        self.assertEqual(report["protection"]["intersecting_padus"], 1)
         self.assertTrue(report["habitat"]["strengths"])
         self.assertTrue(report["pressures"])
         self.assertEqual(len(report["points"]), 4)
@@ -170,11 +183,18 @@ class DeepDiveAnalysisTests(unittest.TestCase):
                 "projected_percentile": 72,
                 "description": "Reduce impervious surface by 50%",
             }],
+            "protection": {
+                "status": "available",
+                "checked_samples": 6,
+                "intersecting_padus": 4,
+                "biodiversity_managed": 2,
+            },
         }
         self.assertIn("development", deep_dive.answer_deep_dive_question(report, "What is the biggest threat?").lower())
         self.assertIn("forest fraction 1000m", deep_dive.answer_deep_dive_question(report, "What helps habitat?").lower())
         self.assertIn("55th to 72th", deep_dive.answer_deep_dive_question(report, "Best restoration scenario?"))
         self.assertIn("94th percentile", deep_dive.answer_deep_dive_question(report, "Where is the strongest habitat?"))
+        self.assertIn("4 intersect", deep_dive.answer_deep_dive_question(report, "How much strong habitat is protected?"))
 
 
 if __name__ == "__main__":
