@@ -169,6 +169,36 @@ class ConservationSummaryTests(unittest.TestCase):
         for phrase in ('not presence probability', '81 points', 'not continuous habitat coverage', 'not causal predictions'):
             self.assertIn(phrase, limitations)
 
+    def test_regional_geojson_is_gis_friendly_and_flags_candidates(self):
+        point = self.point(80, 15)
+        point['features'] = {'forest_fraction_250m': .42}
+        point['restoration'].update(projected_score=.9, score_delta=.1)
+        result = {
+            'analysis_type': 'regional', 'species': 'Bobcat', 'region': 'MA',
+            'latitude': 42.37, 'longitude': -72.28, 'radius_km': 10,
+            'grid_spacing_km': 2, 'model': 'Random Forest', 'training_observations': 405,
+            'limitations': ['sampled locations only'],
+            'points': [point, {'latitude': 42.4, 'longitude': -72.2, 'status': 'unavailable',
+                               'reason': 'Outside coverage'}],
+        }
+        result['conservation'] = predict.summarize_conservation(result['points'])
+        exported = predict.regional_geojson(result)
+        self.assertEqual(exported['type'], 'FeatureCollection')
+        self.assertEqual(exported['wildlocate']['center'], [-72.28, 42.37])
+        self.assertEqual(len(exported['features']), 2)
+        first = exported['features'][0]
+        self.assertEqual(first['geometry'], {'type': 'Point', 'coordinates': [-72., 42.]})
+        self.assertTrue(first['properties']['protection_candidate'])
+        self.assertTrue(first['properties']['restoration_candidate'])
+        self.assertEqual(first['properties']['environment_forest_fraction_250m'], .42)
+        self.assertEqual(first['properties']['restoration_percentile_delta'], 15)
+        self.assertIsNone(exported['features'][1]['properties']['score'])
+        json.dumps(exported, allow_nan=False)
+
+    def test_geojson_rejects_point_assessment(self):
+        with self.assertRaisesRegex(ValueError, 'regional'):
+            predict.regional_geojson({'analysis_type': 'point'})
+
 
 if __name__ == '__main__':
     unittest.main()
