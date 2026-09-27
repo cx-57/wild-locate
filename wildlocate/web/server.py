@@ -25,6 +25,7 @@ from wildlocate.core.registry import (
 from wildlocate.core.regional import REGIONS, get_region
 from wildlocate.core.observations import species_suggestions
 from wildlocate.core.registry import cleanup_job
+from wildlocate.core.deep_dive import answer_deep_dive_question
 
 ROOT = Path(__file__).resolve().parent
 VENDOR = ROOT.parent / "gui"
@@ -40,8 +41,9 @@ for name in ("leaflet.js", "leaflet.css"):
 class JobManager:
     """Own one cancellable prediction subprocess at a time."""
 
-    def __init__(self, command=None):
+    def __init__(self, command=None, worker_mode="predict"):
         self.command = command
+        self.worker_mode = worker_mode
         self.lock = threading.Lock()
         self.job = None
         self.process = None
@@ -52,7 +54,7 @@ class JobManager:
             if self.closed or (self.job and self.job["status"] == "running"):
                 raise ValueError("An analysis is already running or the server is stopping.")
             command = list(self.command) if self.command else [
-                sys.executable, "-u", "-m", "wildlocate.core.worker", "predict",
+                sys.executable, "-u", "-m", "wildlocate.core.worker", self.worker_mode,
             ]
             if self.command is None and username:
                 command.extend(["--account", username])
@@ -467,6 +469,8 @@ class LocalServer(ThreadingHTTPServer):
     def server_close(self):
         if hasattr(self, "jobs"):
             self.jobs.close()
+        if hasattr(self, "deep_dives"):
+            self.deep_dives.close()
         if hasattr(self, "training"):
             self.training.close()
         super().server_close()
@@ -620,6 +624,19 @@ class Handler(BaseHTTPRequestHandler):
                 )
             return
 
+        if path.startswith("/api/deep-dives/"):
+            if self.require_auth() is None:
+                return
+            identifier = path.removeprefix("/api/deep-dives/")
+            if "/" in identifier:
+                self.reply(404, {"error": "Not found."})
+                return
+            try:
+                self.reply(200, self.server.deep_dives.status(identifier))
+            except KeyError:
+                self.reply(404, {"error": "This Deep Dive is no longer available. Start a new one."})
+            return
+
         if path.startswith("/api/training/"):
             if self.require_auth() is None:
                 return
@@ -661,6 +678,7 @@ class Handler(BaseHTTPRequestHandler):
                     create=creating,
                 )
                 self.server.jobs.reset()
+                self.server.deep_dives.reset()
                 self.server.training.reset()
                 with self.server.session_lock:
                     self.server.username = username
@@ -672,6 +690,7 @@ class Handler(BaseHTTPRequestHandler):
                 if username is None:
                     return
                 self.server.jobs.reset()
+                self.server.deep_dives.reset()
                 self.server.training.reset()
                 with self.server.session_lock:
                     self.server.username = None
@@ -697,6 +716,39 @@ class Handler(BaseHTTPRequestHandler):
                     len("/api/jobs/") : -len("/cancel")
                 ]
                 self.reply(200, self.server.jobs.cancel(identifier))
+                return
+
+            if path == "/api/deep-dives":
+                request = validate_request(payload, username)
+                if request.get("radius_km") is None:
+                    request["radius_km"] = 10
+                try:
+                    job = self.server.deep_dives.start(request, username=username)
+                except ValueError as exc:
+                    self.reply(409, {"error": str(exc)})
+                    return
+                self.reply(202, job)
+                return
+
+            if path.startswith("/api/deep-dives/") and path.endswith("/cancel"):
+                identifier = path[
+                    len("/api/deep-dives/") : -len("/cancel")
+                ]
+                self.reply(200, self.server.deep_dives.cancel(identifier))
+                return
+
+            if path.startswith("/api/deep-dives/") and path.endswith("/ask"):
+                identifier = path[
+                    len("/api/deep-dives/") : -len("/ask")
+                ]
+                if set(payload) != {"question"}:
+                    raise ValueError("Ask one question about this Deep Dive.")
+                job = self.server.deep_dives.status(identifier)
+                if job.get("status") != "complete" or not isinstance(job.get("result"), dict):
+                    self.reply(409, {"error": "Wait for the Deep Dive to finish before asking questions."})
+                    return
+                answer = answer_deep_dive_question(job["result"], payload["question"])
+                self.reply(200, {"answer": answer})
                 return
 
             if path == "/api/models/enable":
@@ -774,6 +826,7 @@ def create_server(port=8765):
     server = LocalServer(("127.0.0.1", port), Handler)
     server.token = secrets.token_urlsafe(32)
     server.jobs = JobManager()
+    server.deep_dives = JobManager(worker_mode="deep-dive")
     server.training = TrainingManager()
     server.username = None
     server.session_lock = threading.Lock()
