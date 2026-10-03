@@ -16,7 +16,6 @@ let overlay = null;
 let authCreate = false;
 
 let deepDiveJobId = null;
-let deepDiveReport = null;
 let deepDiveRevision = 0;
 let deepDiveBusy = false;
 let deepDiveMap = null;
@@ -144,7 +143,6 @@ $('sign-out').addEventListener('click', async () => {
   activeJob = null;
   result = null;
   deepDiveJobId = null;
-  deepDiveReport = null;
   deepDiveRevision += 1;
   deepDiveBusy = false;
   if (deepDiveStageTimer) clearInterval(deepDiveStageTimer);
@@ -305,7 +303,6 @@ function clearResult() {
   $('scores').open = false;
   $('conditions').open = false;
   $('point-percentile').hidden = true;
-  deepDiveReport = null;
   error('');
 }
 
@@ -500,8 +497,8 @@ function showResult(data) {
   }
 
   $('deep-dive-cta-copy').textContent = area
-    ? `Research the same ${data.radius_km} km area with model-driver comparisons, pressure signals, and scenario experiments.`
-    : 'Expand this point into a 10 km research area for a deeper landscape-level analysis.';
+    ? `Analyze the same ${data.radius_km} km area in more detail.`
+    : 'Analyze a 10 km area around this point.';
   $('status').textContent = area
     ? 'Assessment complete. Select a map point for details.'
     : 'Assessment complete.';
@@ -603,48 +600,29 @@ function drawDeepDiveMap(report) {
   setTimeout(() => deepDiveMap && deepDiveMap.invalidateSize({pan: false}), 0);
 }
 
-function appendScope(text, pending = false) {
-  const row = document.createElement('div');
-  row.className = 'scope-row';
-  const dot = document.createElement('span');
-  dot.className = pending ? 'scope-dot pending' : 'scope-dot';
-  const copy = document.createElement('span');
-  copy.textContent = text;
-  row.append(dot, copy);
-  $('deep-dive-scope').append(row);
-}
-
 function renderDeepDive(report) {
-  deepDiveReport = report;
   $('deep-dive-loading').hidden = true;
   $('deep-dive-error').hidden = true;
   $('deep-dive-content').hidden = false;
-  $('deep-dive-title').textContent = `${report.species} · Conservation Deep Dive`;
-  $('deep-dive-meta').textContent =
-    `${report.radius_km} km research radius · ${report.model} · ${Number(report.training_observations || 0).toLocaleString()} training observations`;
+  $('deep-dive-title').textContent = `${report.species} · Deep Dive`;
+  $('deep-dive-meta').textContent = `${report.radius_km} km · ${report.model}`;
 
   const overview = report.overview || {};
   const metrics = $('deep-dive-overview');
   metrics.replaceChildren();
-  researchMetric(metrics, String(overview.evaluated_points ?? 0), 'Samples evaluated');
+  researchMetric(metrics, String(overview.evaluated_points ?? 0), 'Samples');
   researchMetric(
     metrics,
     Number.isFinite(overview.mean_percentile) ? ordinal(overview.mean_percentile) : '—',
-    'Mean habitat percentile'
+    'Mean percentile'
   );
-  researchMetric(metrics, String(overview.high_suitability_points ?? 0), 'High / very high samples');
-  researchMetric(metrics, String(overview.very_high_suitability_points ?? 0), 'Very high samples');
+  researchMetric(metrics, String(overview.high_suitability_points ?? 0), 'High-suitability samples');
 
   const strongest = overview.strongest_point;
   const sector = overview.strongest_sector;
   $('deep-dive-overview-copy').textContent = strongest
-    ? `The strongest sampled location reached the ${ordinal(strongest.percentile)} percentile.` +
-      (sector ? ` At a broader scale, the ${sector.name.toLowerCase()} sector had the highest mean percentile (${Math.round(sector.mean_percentile)}).` : '')
-    : 'No sampled location had enough environmental data for a landscape summary.';
-
-  $('deep-dive-scope').replaceChildren();
-  for (const item of report.data_scope?.connected || []) appendScope(item);
-  for (const item of report.data_scope?.not_connected_yet || []) appendScope(`${item} — not connected yet`, true);
+    ? `Strongest sample: ${ordinal(strongest.percentile)} percentile${sector ? ` · strongest area: ${sector.name.toLowerCase()}` : ''}.`
+    : 'No usable habitat samples.';
 
   const strengths = $('deep-dive-strengths');
   strengths.replaceChildren();
@@ -652,10 +630,10 @@ function renderDeepDive(report) {
     researchRow(
       strengths,
       friendlyFeature(row.feature),
-      `Positive model effect across ${row.affected_points} of ${row.points_evaluated} evaluated samples · mean effect +${number(row.mean_effect)}`
+      `+${number(row.mean_effect)} mean effect · ${row.affected_points}/${row.points_evaluated} samples`
     );
   }
-  if (!strengths.children.length) researchRow(strengths, 'No consistent regional strength', 'No predictor had a positive mean model effect across the evaluated samples.');
+  if (!strengths.children.length) researchRow(strengths, 'None detected', 'No consistent positive model signal.');
 
   const constraints = $('deep-dive-constraints');
   constraints.replaceChildren();
@@ -663,10 +641,10 @@ function renderDeepDive(report) {
     researchRow(
       constraints,
       friendlyFeature(row.feature),
-      `Negative model effect across ${row.affected_points} of ${row.points_evaluated} evaluated samples · mean effect ${number(row.mean_effect)}`
+      `${number(row.mean_effect)} mean effect · ${row.affected_points}/${row.points_evaluated} samples`
     );
   }
-  if (!constraints.children.length) researchRow(constraints, 'No consistent regional constraint', 'No predictor had a negative mean model effect across the evaluated samples.');
+  if (!constraints.children.length) researchRow(constraints, 'None detected', 'No consistent negative model signal.');
 
   const pressures = $('deep-dive-pressures');
   pressures.replaceChildren();
@@ -677,88 +655,17 @@ function renderDeepDive(report) {
     strong.textContent = pressure.domain;
     const detail = document.createElement('span');
     detail.textContent =
-      `${Math.round(pressure.affected_percentage)}% of evaluated samples show a negative model signal in this domain · ${pressure.features.map(friendlyFeature).join(', ')}`;
+      `${Math.round(pressure.affected_percentage)}% of samples · ${pressure.features.map(friendlyFeature).join(', ')}`;
     card.append(strong, detail);
     pressures.append(card);
   }
   if (!pressures.children.length) {
     const card = document.createElement('div');
     card.className = 'pressure-card';
-    card.textContent = 'No consistent negative pressure domain was detected.';
+    card.textContent = 'No consistent negative pressure signal.';
     pressures.append(card);
   }
 
-  const protection = report.protection || {};
-  const protectionMetrics = $('deep-dive-protection-metrics');
-  const protectionList = $('deep-dive-protection');
-  protectionMetrics.replaceChildren();
-  protectionList.replaceChildren();
-  if (protection.status === 'unavailable') {
-    researchMetric(protectionMetrics, 'Unavailable', 'PAD-US status');
-    researchRow(
-      protectionList,
-      'Protection context could not be retrieved',
-      protection.message || 'The USGS PAD-US service was unavailable. The habitat-model portions of this Deep Dive are still valid.'
-    );
-  } else {
-    researchMetric(protectionMetrics, String(protection.checked_samples || 0), 'Strong samples checked');
-    researchMetric(protectionMetrics, String(protection.intersecting_padus || 0), 'Intersect PAD-US');
-    researchMetric(protectionMetrics, String(protection.biodiversity_managed || 0), 'GAP 1–2 samples');
-    researchMetric(protectionMetrics, String(protection.not_intersecting_padus || 0), 'No PAD-US intersection');
-    if (protection.status === 'partial') {
-      researchRow(
-        protectionList,
-        'Partial PAD-US coverage',
-        `${protection.failed_queries} sampled location${protection.failed_queries === 1 ? '' : 's'} could not be checked because the external service did not respond.`
-      );
-    }
-    const orderedProtection = [...(protection.samples || [])]
-      .sort((a, b) => Number(b.percentile || 0) - Number(a.percentile || 0))
-      .slice(0, 6);
-    for (const sample of orderedProtection) {
-      const named = (sample.areas || []).find(area => area.name || area.designation || area.manager);
-      const context = sample.within_padus
-        ? `Intersects PAD-US${sample.biodiversity_managed ? ' · GAP 1–2 biodiversity-management intent' : ''}${named?.name ? ` · ${named.name}` : ''}`
-        : 'No PAD-US record intersects this sampled point; this does not prove the land is unprotected.';
-      researchRow(
-        protectionList,
-        `${ordinal(sample.percentile)} percentile · ${coords(sample.latitude, sample.longitude)}`,
-        context
-      );
-    }
-    if (!orderedProtection.length) {
-      researchRow(protectionList, 'No high-suitability samples to check', 'PAD-US is queried only for High and Very High sampled habitat locations.');
-    }
-  }
-
-  const contrasts = $('deep-dive-contrasts');
-  contrasts.replaceChildren();
-  for (const row of report.habitat?.contrasts || []) {
-    const direction = row.difference >= 0 ? 'higher' : 'lower';
-    researchRow(
-      contrasts,
-      friendlyFeature(row.feature),
-      `${direction} in the strongest habitat samples · strong median ${number(row.high_habitat_median)} vs weak median ${number(row.low_habitat_median)}`
-    );
-  }
-  if (!contrasts.children.length) researchRow(contrasts, 'No stable contrast', 'Strong and weak sampled groups did not produce a usable standardized feature contrast.');
-
-  const scenarios = $('deep-dive-scenarios');
-  scenarios.replaceChildren();
-  for (const scenario of report.scenarios || []) {
-    researchRow(
-      scenarios,
-      `+${scenario.percentile_delta} percentile points · ${ordinal(scenario.current_percentile)} → ${ordinal(scenario.projected_percentile)}`,
-      `${scenario.description} · ${coords(scenario.latitude, scenario.longitude)}`
-    );
-  }
-  if (!scenarios.children.length) researchRow(scenarios, 'No positive tested scenario', 'The tested forest and impervious-surface counterfactuals did not increase percentile at the sampled locations.');
-
-  $('deep-dive-chat-log').replaceChildren();
-  appendDeepDiveMessage(
-    'assistant',
-    `Deep Dive complete. I can explain the strongest habitat, modeled pressure signals, habitat strengths, or scenario experiments for ${report.species}.`
-  );
   drawDeepDiveMap(report);
 }
 
@@ -772,12 +679,10 @@ function setDeepDiveBusy(value) {
   deepDiveStageTimer = null;
   if (value) {
     const stages = [
-      'Sampling the selected landscape…',
-      'Evaluating species-specific habitat conditions…',
-      'Comparing strong and weak habitat…',
-      'Aggregating modeled pressure signals…',
-      'Testing environmental scenarios…',
-      'Building the research summary…',
+      'Sampling habitat…',
+      'Evaluating model signals…',
+      'Finding strengths and weaknesses…',
+      'Building results…',
     ];
     let index = 0;
     $('deep-dive-loading-stage').textContent = stages[index];
@@ -840,9 +745,9 @@ async function startDeepDive() {
   deepDiveJobId = null;
   $('deep-dive-content').hidden = true;
   $('deep-dive-error').hidden = true;
-  $('deep-dive-title').textContent = `${result.species} · Conservation Deep Dive`;
+  $('deep-dive-title').textContent = `${result.species} · Deep Dive`;
   $('deep-dive-meta').textContent =
-    `${radius} km research radius · derived from your completed ${result.analysis_type === 'regional' ? 'regional' : 'point'} habitat assessment`;
+    `${radius} km · ${result.analysis_type === 'regional' ? 'regional' : 'point'} analysis`;
   showSection('deep-dive');
   setDeepDiveBusy(true);
 
@@ -878,42 +783,9 @@ async function cancelDeepDive() {
   }
 }
 
-function appendDeepDiveMessage(role, text) {
-  const message = document.createElement('div');
-  message.className = `chat-message ${role}`;
-  message.textContent = text;
-  $('deep-dive-chat-log').append(message);
-}
-
-async function askDeepDive(question) {
-  const text = String(question || '').trim();
-  if (!text || !deepDiveJobId || !deepDiveReport) return;
-  appendDeepDiveMessage('user', text);
-  $('deep-dive-question').value = '';
-  $('deep-dive-ask').disabled = true;
-  try {
-    const response = await api(`/api/deep-dives/${deepDiveJobId}/ask`, {question: text});
-    appendDeepDiveMessage('assistant', response.answer);
-  } catch (exc) {
-    appendDeepDiveMessage('assistant', `I couldn't answer that from this Deep Dive: ${exc.message}`);
-  } finally {
-    $('deep-dive-ask').disabled = false;
-  }
-}
-
 $('deep-dive-launch').addEventListener('click', startDeepDive);
 $('deep-dive-back').addEventListener('click', () => showSection('explore'));
 $('deep-dive-cancel').addEventListener('click', cancelDeepDive);
-$('deep-dive-chat-form').addEventListener('submit', event => {
-  event.preventDefault();
-  askDeepDive($('deep-dive-question').value);
-});
-$('deep-q-strengths').addEventListener('click', () => askDeepDive('What helps this habitat?'));
-$('deep-q-pressures').addEventListener('click', () => askDeepDive('What is the biggest pressure?'));
-$('deep-q-where').addEventListener('click', () => askDeepDive('Where is habitat strongest?'));
-$('deep-q-protection').addEventListener('click', () => askDeepDive('How much strong habitat overlaps PAD-US?'));
-$('deep-q-scenarios').addEventListener('click', () => askDeepDive('What scenario changed the model most?'));
-
 async function poll(id, version) {
   if (activeJob !== id || revision !== version) return;
   try {
