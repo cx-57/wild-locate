@@ -160,11 +160,10 @@
           <p class="disclaimer">Suitability is relative, not a probability that an animal is present. Regional results sample a grid, not continuous habitat coverage.</p>
           <section id="deep-dive-cta" class="deep-dive-cta">
             <div>
-              <span class="eyebrow">NEXT STEP</span>
-              <h3>Research this landscape more deeply.</h3>
-              <p id="deep-dive-cta-copy" class="hint">Compare strong and weak habitat, investigate modeled pressure signals, and test environmental scenarios.</p>
+              <h3>Deep Dive</h3>
+              <p id="deep-dive-cta-copy" class="hint">Analyze this area in more detail.</p>
             </div>
-            <button id="deep-dive-launch" type="button" class="deep-dive-launch">Run Conservation Deep Dive <span aria-hidden="true">→</span></button>
+            <button id="deep-dive-launch" type="button" class="deep-dive-launch">Open Deep Dive <span aria-hidden="true">→</span></button>
           </section>
         </div>
       </div>
@@ -176,113 +175,51 @@
 
 <main id="deep-dive-page" class="deep-dive-page" hidden>
   <section class="deep-dive-hero">
-    <button id="deep-dive-back" type="button" class="text-button deep-dive-back">← Back to habitat analysis</button>
-    <div class="deep-dive-hero-row">
-      <div>
-        <span class="eyebrow">CONSERVATION DEEP DIVE</span>
-        <h1 id="deep-dive-title">Research workspace</h1>
-        <p id="deep-dive-meta">Run a habitat analysis first.</p>
-      </div>
-      <span class="research-badge">Second-stage analysis</span>
-    </div>
+    <button id="deep-dive-back" type="button" class="text-button deep-dive-back">← Back</button>
+    <h1 id="deep-dive-title">Deep Dive</h1>
+    <p id="deep-dive-meta"></p>
   </section>
 
   <section id="deep-dive-loading" class="panel deep-dive-loading" hidden aria-live="polite">
-    <span class="eyebrow">RESEARCH IN PROGRESS</span>
-    <h2>Building the Deep Dive.</h2>
-    <p id="deep-dive-loading-stage">Preparing the landscape samples…</p>
+    <h2>Analyzing landscape…</h2>
+    <p id="deep-dive-loading-stage">Sampling habitat…</p>
     <div class="deep-dive-progress" aria-hidden="true"><span></span></div>
-    <button id="deep-dive-cancel" type="button" class="secondary compact">Cancel Deep Dive</button>
+    <button id="deep-dive-cancel" type="button" class="secondary compact">Cancel</button>
   </section>
   <p id="deep-dive-error" class="error" hidden></p>
 
   <div id="deep-dive-content" hidden>
-    <section class="deep-dive-overview-grid">
-      <article class="panel research-card">
-        <span class="eyebrow">LANDSCAPE OVERVIEW</span>
-        <h2>What the model sees across this area</h2>
-        <div id="deep-dive-overview" class="research-metrics"></div>
-        <p id="deep-dive-overview-copy" class="research-copy"></p>
-      </article>
-      <article class="panel research-card scope-card">
-        <span class="eyebrow">DATA SCOPE</span>
-        <h2>What this Deep Dive can support</h2>
-        <div id="deep-dive-scope"></div>
-      </article>
+    <section class="panel research-card">
+      <h2>Overview</h2>
+      <div id="deep-dive-overview" class="research-metrics"></div>
+      <p id="deep-dive-overview-copy" class="research-copy"></p>
     </section>
 
     <section class="panel deep-dive-map-card">
-      <div class="deep-dive-section-heading">
-        <div><span class="eyebrow">RESEARCH MAP</span><h2>Landscape samples</h2></div>
-        <p>Color shows relative habitat percentile.</p>
-      </div>
-      <div id="deep-dive-map" role="region" aria-label="Conservation Deep Dive map"></div>
+      <div class="deep-dive-section-heading"><h2>Habitat map</h2></div>
+      <div id="deep-dive-map" role="region" aria-label="Deep Dive habitat map"></div>
       <p id="deep-dive-map-status" class="map-status" hidden></p>
     </section>
 
     <section class="deep-dive-analysis-grid">
       <article class="panel research-card">
-        <span class="eyebrow">HABITAT STRENGTHS</span>
-        <h2>Conditions consistently helping the model</h2>
+        <h2>Strengths</h2>
         <div id="deep-dive-strengths" class="research-list"></div>
       </article>
       <article class="panel research-card">
-        <span class="eyebrow">HABITAT CONSTRAINTS</span>
-        <h2>Conditions consistently lowering the model</h2>
+        <h2>Weaknesses</h2>
         <div id="deep-dive-constraints" class="research-list"></div>
       </article>
     </section>
 
     <section class="panel research-card">
-      <span class="eyebrow">THREAT SIGNALS</span>
-      <h2>Where negative model effects cluster</h2>
-      <p class="research-copy">These are species-model pressure signals, not confirmed ecological threats.</p>
+      <h2>Pressure signals</h2>
       <div id="deep-dive-pressures" class="pressure-grid"></div>
+      <p class="research-copy">Model signals, not confirmed ecological threats.</p>
     </section>
-
-    <section class="panel research-card">
-      <span class="eyebrow">PROTECTION CONTEXT</span>
-      <h2>How stronger modeled habitat overlaps managed land</h2>
-      <p class="research-copy">USGS PAD-US 4.1 is checked only at high/very-high sampled locations. This is point overlap, not protected acreage.</p>
-      <div id="deep-dive-protection-metrics" class="research-metrics"></div>
-      <div id="deep-dive-protection" class="research-list"></div>
-    </section>
-
-    <section class="deep-dive-analysis-grid">
-      <article class="panel research-card">
-        <span class="eyebrow">STRONG VS. WEAK HABITAT</span>
-        <h2>What most separates the two</h2>
-        <div id="deep-dive-contrasts" class="research-list"></div>
-      </article>
-      <article class="panel research-card">
-        <span class="eyebrow">SCENARIO EXPERIMENTS</span>
-        <h2>Largest modeled responses</h2>
-        <div id="deep-dive-scenarios" class="research-list"></div>
-      </article>
-    </section>
-
-    <section class="panel research-card ask-card">
-      <span class="eyebrow">ASK WILD-LOCATE</span>
-      <h2>Ask about this Deep Dive.</h2>
-      <p class="research-copy">Answers are grounded only in this analysis; the assistant does not invent outside ecological evidence.</p>
-      <div class="question-chips">
-        <button id="deep-q-strengths" type="button">What helps this habitat?</button>
-        <button id="deep-q-pressures" type="button">What is the biggest pressure?</button>
-        <button id="deep-q-where" type="button">Where is habitat strongest?</button>
-        <button id="deep-q-protection" type="button">How much strong habitat overlaps PAD-US?</button>
-        <button id="deep-q-scenarios" type="button">What scenario changed the model most?</button>
-      </div>
-      <div id="deep-dive-chat-log" class="chat-log" aria-live="polite"></div>
-      <form id="deep-dive-chat-form" class="deep-dive-chat-form">
-        <input id="deep-dive-question" maxlength="300" placeholder="Ask a question about this analysis…" required>
-        <button id="deep-dive-ask" class="secondary compact" type="submit">Ask</button>
-      </form>
-    </section>
-
-    <p class="deep-dive-disclaimer">Deep Dive is a screening and research-exploration tool. It does not identify legal conservation priority, establish causality, or replace ecological field validation.</p>
   </div>
 
-  <footer><span>Wild-Locate · Conservation Deep Dive</span></footer>
+  <footer><span>Wild-Locate</span></footer>
 </main>
 
 <main id="species-page" class="species-page" hidden>
