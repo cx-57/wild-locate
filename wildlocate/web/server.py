@@ -25,7 +25,6 @@ from wildlocate.core.registry import (
 from wildlocate.core.regional import REGIONS, get_region
 from wildlocate.core.observations import species_suggestions
 from wildlocate.core.registry import cleanup_job
-from wildlocate.core.deep_dive import answer_deep_dive_question
 
 ROOT = Path(__file__).resolve().parent
 VENDOR = ROOT.parent / "gui"
@@ -735,20 +734,6 @@ class Handler(BaseHTTPRequestHandler):
                     len("/api/deep-dives/") : -len("/cancel")
                 ]
                 self.reply(200, self.server.deep_dives.cancel(identifier))
-                return
-
-            if path.startswith("/api/deep-dives/") and path.endswith("/ask"):
-                identifier = path[
-                    len("/api/deep-dives/") : -len("/ask")
-                ]
-                if set(payload) != {"question"}:
-                    raise ValueError("Ask one question about this Deep Dive.")
-                job = self.server.deep_dives.status(identifier)
-                if job.get("status") != "complete" or not isinstance(job.get("result"), dict):
-                    self.reply(409, {"error": "Wait for the Deep Dive to finish before asking questions."})
-                    return
-                answer = answer_deep_dive_question(job["result"], payload["question"])
-                self.reply(200, {"answer": answer})
                 return
 
             if path == "/api/models/enable":
