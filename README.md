@@ -46,33 +46,17 @@ Florida and Arizona use cached national raster tiles that download as needed.
 - Uses target-group background observations, environmental feature extraction, and spatial cross-validation.
 - Stores custom models and enabled-model choices per local account.
 
-## Conservation Deep Dive
+## Deep Dive
 
-A completed habitat assessment can launch a separate **Conservation Deep Dive** workspace. The ordinary assessment stays lightweight; Deep Dive deliberately performs a heavier second-stage analysis over the selected landscape.
+A completed habitat assessment can open a separate Deep Dive for the same landscape. Point assessments use a 10 km area.
 
-For a regional assessment, Deep Dive researches the same 10, 25, or 50 km radius. For a single-point assessment, it expands to a 10 km research area around that point.
+Deep Dive resamples 81 locations and summarizes:
+- strongest modeled habitat;
+- habitat strengths and weaknesses;
+- model pressure signals;
+- the sample map.
 
-The current Deep Dive:
-
-- resamples the landscape at 81 locations with the selected species model;
-- compares the strongest and weakest modeled habitat;
-- aggregates feature interpretations into regional habitat strengths and constraints;
-- groups negative model effects into pressure domains such as development, road exposure, forest structure, water/wetlands, and terrain;
-- identifies the broad landscape sector with the highest mean relative habitat percentile;
-- runs the existing forest-cover / impervious-surface counterfactual scenarios and surfaces the largest modeled responses;
-- provides an **Ask Wild-Locate** research panel whose answers are generated only from the completed Deep Dive report.
-
-Deep Dive keeps model interpretation separate from ecological causation. Feature effects compare the current prediction with a prediction in which one feature is replaced by its comparison median. Pressure domains summarize negative model effects; they are not confirmed threats. Counterfactual scenarios are model experiments, not management recommendations.
-
-### Current data scope
-
-Deep Dive uses the environmental layers available to the species model—land cover, impervious surface, elevation/terrain, water context, and road context—and adds **USGS PAD-US 4.1** protection context for High and Very High sampled habitat locations.
-
-For those stronger samples, Wild-Locate checks whether the sampled coordinate intersects a PAD-US managed/protected-area record. It separately counts records with **GAP Status 1 or 2**, which indicate management intent focused on maintaining biodiversity. These are point-overlap checks, not protected-acreage estimates, and a point with no PAD-US intersection should not be interpreted as definitively unprotected.
-
-PAD-US is an external public service. If it is unavailable or only some lookups succeed, the habitat-model Deep Dive still completes and labels protection context unavailable or partial rather than fabricating results.
-
-**Historical land-cover/development change is not connected yet.** That requires an additional time-series dataset before Wild-Locate can make claims about recent habitat loss or development trends.
+These are model interpretations, not proof of ecological causation.
 
 ## Architecture
 
