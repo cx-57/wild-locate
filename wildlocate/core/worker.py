@@ -55,7 +55,7 @@ def run_deep_dive(account=None):
         except Exception:
             traceback.print_exc(file=sys.stderr)
             response = {
-                "error": "The Conservation Deep Dive could not be completed. Check the selected model and environmental data, then try again.",
+                "error": "The Deep Dive could not be completed. Check the selected model and environmental data, then try again.",
                 "code": "deep_dive_error",
             }
         print(json.dumps(response, allow_nan=False), flush=True)
