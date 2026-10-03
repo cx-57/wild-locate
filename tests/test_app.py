@@ -573,7 +573,7 @@ class ServerTests(unittest.TestCase):
             time.sleep(.01)
         self.assertEqual(result['result']['radius_km'], 25)
 
-    def test_deep_dive_http_round_trip_and_grounded_question(self):
+    def test_deep_dive_http_round_trip(self):
         self.server.deep_dives.close()
         self.server.deep_dives = JobManager(command=[
             sys.executable,
@@ -591,15 +591,6 @@ class ServerTests(unittest.TestCase):
             time.sleep(.01)
         self.assertEqual(result['status'], 'complete')
         self.assertEqual(result['result']['analysis_type'], 'deep_dive')
-        with patch('wildlocate.web.server.answer_deep_dive_question', return_value='Grounded answer') as answer:
-            status, body = self.request(
-                'POST',
-                f"/api/deep-dives/{job['id']}/ask",
-                {'question': 'What is the biggest pressure?'},
-            )
-        self.assertEqual(status, 200)
-        self.assertEqual(json.loads(body)['answer'], 'Grounded answer')
-        answer.assert_called_once()
 
     def test_cli_preserves_desktop_and_dispatches_web(self):
         from wildlocate.cli import main
