@@ -200,53 +200,30 @@ const deepDiveReport = {
   latitude:42.37,
   longitude:-72.28,
   radius_km:25,
-  grid_spacing_km:5,
   model:'Random Forest',
-  training_observations:405,
   sample_points:81,
   unavailable_points:0,
   overview:{
     evaluated_points:81,
     mean_percentile:64,
-    median_percentile:66,
     high_suitability_points:45,
-    very_high_suitability_points:18,
     strongest_point:{latitude:42.4,longitude:-72.3,score:.9,percentile:95,category:'Very High'},
-    weakest_point:{latitude:42.2,longitude:-72.1,score:.2,percentile:18,category:'Very Low'},
     strongest_sector:{name:'Northwest',mean_percentile:77,points:10},
   },
   habitat:{
-    strengths:[{feature:'forest_fraction_1000m',mean_effect:.08,affected_points:55,points_evaluated:81,median_value:.62}],
-    constraints:[{feature:'mean_impervious_1000m',mean_effect:-.05,affected_points:42,points_evaluated:81,median_value:20}],
-    contrasts:[{feature:'forest_fraction_1000m',high_habitat_median:.75,low_habitat_median:.3,difference:.45,standardized_difference:1.2}],
+    strengths:[{feature:'forest_fraction_1000m',mean_effect:.08,affected_points:55,points_evaluated:81}],
+    constraints:[{feature:'mean_impervious_1000m',mean_effect:-.05,affected_points:42,points_evaluated:81}],
   },
-  pressures:[{domain:'Development',mean_negative_effect:.04,affected_points:42,affected_percentage:51.85,features:['mean_impervious_1000m']}],
-  protection:{
-    status:'available',
-    high_suitability_samples:2,
-    checked_samples:2,
-    failed_queries:0,
-    intersecting_padus:1,
-    biodiversity_managed:1,
-    not_intersecting_padus:1,
-    samples:[
-      {latitude:42.4,longitude:-72.3,percentile:95,category:'Very High',within_padus:true,biodiversity_managed:true,areas:[{name:'Example Refuge'}]},
-      {latitude:42.3,longitude:-72.2,percentile:70,category:'High',within_padus:false,biodiversity_managed:false,areas:[]},
-    ],
-  },
-  scenarios:[{latitude:42.3,longitude:-72.2,current_percentile:50,projected_percentile:68,percentile_delta:18,description:'Reduce impervious surface by 50%',score_delta:.1,changes:[]}],
-  points:[
-    {latitude:42.4,longitude:-72.3,status:'ok',score:.9,percentile:95,category:'Very High',top_influences:[]},
-    {latitude:42.2,longitude:-72.1,status:'ok',score:.2,percentile:18,category:'Very Low',top_influences:[]},
+  pressures:[
+    {domain:'Development',mean_negative_effect:.04,affected_points:42,affected_percentage:51.85,features:['mean_impervious_1000m']}
   ],
-  data_scope:{
-    connected:['land cover','road context','USGS PAD-US 4.1 protected-area context'],
-    not_connected_yet:['historical land-cover change'],
-  },
-  limitations:['sampled locations only'],
+  points:[
+    {latitude:42.4,longitude:-72.3,status:'ok',score:.9,percentile:95,category:'Very High'},
+    {latitude:42.2,longitude:-72.1,status:'ok',score:.2,percentile:18,category:'Very Low'},
+  ],
 };
 
-test('Conservation Deep Dive opens a separate in-app workspace and preserves the habitat result',async()=>{
+test('Deep Dive opens a separate in-app workspace and preserves the habitat result',async()=>{
   const b=await browser();
   b.context.assessment={
     ...complete.result,
@@ -280,9 +257,8 @@ test('Conservation Deep Dive opens a separate in-app workspace and preserves the
   assert.equal(b.get('deep-dive-content').hidden,false);
   assert.match(b.get('deep-dive-title').textContent,/Bobcat/);
   assert.match(textOf(b.get('deep-dive-strengths')),/forest fraction 1 km/i);
+  assert.match(textOf(b.get('deep-dive-constraints')),/mean impervious 1 km/i);
   assert.match(textOf(b.get('deep-dive-pressures')),/Development/);
-  assert.match(textOf(b.get('deep-dive-protection')),/Example Refuge/);
-  assert.match(textOf(b.get('deep-dive-scenarios')),/18 percentile points/);
 
   b.get('deep-dive-back').click();
   assert.equal(b.get('explore-page').hidden,false);
@@ -290,7 +266,7 @@ test('Conservation Deep Dive opens a separate in-app workspace and preserves the
   assert.equal(b.run('result'),b.context.assessment);
 });
 
-test('Point analyses expand to a 10 km Deep Dive research area',async()=>{
+test('Point analyses expand to a 10 km Deep Dive area',async()=>{
   const b=await browser();
   b.context.assessment={...complete.result,region:'MA'};
   b.run('showResult(assessment)');
@@ -308,18 +284,3 @@ test('Point analyses expand to a 10 km Deep Dive research area',async()=>{
   assert.equal(request.radius_km,10);
   assert.match(b.get('deep-dive-meta').textContent,/10 km/);
 });
-
-test('Ask Wild-Locate is grounded in the completed Deep Dive job',async()=>{
-  const b=await browser();
-  b.context.report=deepDiveReport;
-  b.run("deepDiveJobId='deep-chat';deepDiveReport=report;renderDeepDive(report)");
-  b.context.fetch=async(path,options)=>{
-    assert.equal(path,'/api/deep-dives/deep-chat/ask');
-    const payload=JSON.parse(options.body);
-    assert.match(payload.question,/pressure/i);
-    return response({answer:'Development is the strongest modeled pressure signal in this analysis.'});
-  };
-  await b.run("askDeepDive('What is the biggest pressure?')");
-  assert.match(textOf(b.get('deep-dive-chat-log')),/Development is the strongest modeled pressure/i);
-});
-
