@@ -89,14 +89,35 @@ class PlaceAnalysisTests(unittest.TestCase):
                 self.assertEqual(report["failed_evaluations"], 1)
                 json.dumps(report, allow_nan=False)
 
-    def test_offline_mapping_does_not_invent_named_terrain_sites(self):
+    def test_offline_mapping_still_shows_real_raster_terrain_samples(self):
         terrain = point(influences=[influence("mean_slope_250m", -.04, 18, 4)])
         with patch.object(place_analysis, "discover_places", side_effect=ConnectionError("offline")):
             report = place_analysis.analyze_places([terrain], 42, -72, 10, "MA",
-                lambda lat, lon: self.fail("No unmapped synthetic site should be scored"))
-        self.assertEqual(report["status"], "unavailable")
-        self.assertEqual(report["sites"], [])
+                lambda lat, lon: self.fail("Existing terrain sample must not be recomputed"))
+        self.assertEqual(report["status"], "partial")
+        self.assertEqual(len(report["sites"]), 1)
+        site = report["sites"][0]
+        self.assertEqual(site["kind"], "habitat")
+        self.assertTrue(site["terrain_sample"])
+        self.assertEqual(site["geometry"]["type"], "Point")
+        self.assertEqual(site["source"], "USGS 3DEP terrain model")
+        self.assertIn("Terrain sample at", site["name"])
+        self.assertEqual(report["mapped_features"], 0)
+        self.assertEqual(report["terrain_samples"], 1)
         self.assertIn("unavailable", " ".join(report["warnings"]).lower())
+
+    def test_terrain_samples_respect_habitat_caps_alongside_mapped_polygon(self):
+        terrains = [
+            point(42 + i * .01, -72, [influence("mean_slope_250m", -.1 - i * .01)])
+            for i in range(3)
+        ]
+        mapped = [feature("wetland", "habitat", 42.025)]
+        report = self.analyze(mapped, lambda lat, lon: point(lat, lon, [
+            influence("wetland_fraction_250m", -.05)]), points=terrains)
+        sites = report["sites"]
+        self.assertEqual(sum(site["terrain_sample"] for site in sites), 2)
+        self.assertEqual(sum(not site["terrain_sample"] for site in sites), 1)
+        self.assertEqual(len(sites), 3)
 
     def test_missing_mapping_does_not_claim_no_buildings_exist(self):
         report = self.analyze([], lambda lat, lon: point(), mapping_status="unavailable")
