@@ -248,17 +248,26 @@ def analyze_deep_dive(species, latitude, longitude, radius_km, region="MA", *, u
         model, predictors, record.species, record
     )
 
+    def score_location(point_latitude, point_longitude):
+        """Return the model inputs and score shared by grid and mapped-place checks."""
+        frame = build_prediction_frame(
+            extractor(point_latitude, point_longitude),
+            predictors,
+        )
+        if not np.isfinite(frame.to_numpy(dtype=float)).all():
+            raise ValueError("Environmental feature extraction returned missing values")
+        score = float(model.predict_proba(frame)[0, 1])
+        if not math.isfinite(score):
+            raise ValueError("Prediction returned a non-finite suitability score")
+        return frame, score, percentile_of_score(score, comparison_scores)
+
     for point in points:
         # Points near state boundaries or outside installed raster coverage should
         # not abort an otherwise valid Deep Dive. They are explicitly unscored.
         try:
-            extracted = extractor(point["latitude"], point["longitude"])
-            frame = build_prediction_frame(extracted, predictors)
-            if not np.isfinite(frame.to_numpy(dtype=float)).all():
-                raise ValueError("Environmental feature extraction returned missing values")
-            score = float(model.predict_proba(frame)[0, 1])
-            if not math.isfinite(score):
-                raise ValueError("Prediction returned a non-finite suitability score")
+            frame, score, percentile = score_location(
+                point["latitude"], point["longitude"]
+            )
         except Exception as exc:
             logger.warning(
                 "Deep Dive sample unavailable at %.5f, %.5f: %s",
@@ -268,7 +277,6 @@ def analyze_deep_dive(species, latitude, longitude, radius_km, region="MA", *, u
                          reason="Outside model coverage or environmental data unavailable.")
             continue
 
-        percentile = percentile_of_score(score, comparison_scores)
         point.update(
             status="ok", score=score, percentile=percentile,
             category=category_for_percentile(percentile),
@@ -286,13 +294,7 @@ def analyze_deep_dive(species, latitude, longitude, radius_km, region="MA", *, u
     summary = summarize_deep_dive(points, latitude, longitude)
 
     def evaluate_place(place_latitude, place_longitude):
-        frame = build_prediction_frame(extractor(place_latitude, place_longitude), predictors)
-        if not np.isfinite(frame.to_numpy(dtype=float)).all():
-            raise ValueError("Environmental feature extraction returned missing values")
-        score = float(model.predict_proba(frame)[0, 1])
-        if not math.isfinite(score):
-            raise ValueError("Prediction returned a non-finite suitability score")
-        percentile = percentile_of_score(score, comparison_scores)
+        frame, score, percentile = score_location(place_latitude, place_longitude)
         influences = habitat_insights(
             model, frame, comparison, comparison_scores, score, include_scenarios=False
         ).get("influences", [])

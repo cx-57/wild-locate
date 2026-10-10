@@ -497,12 +497,13 @@ def extract_features(latitude, longitude):
 
     validate_point_is_evaluable(x_5070, y_5070, landcover_src, "NLCD land cover")
     validate_point_is_evaluable(x_5070, y_5070, impervious_src, "NLCD impervious surface")
-    validate_point_is_evaluable(x_5070, y_5070, elevation_src, "USGS 3DEP elevation")
+    row_idx, col_idx = validate_point_is_evaluable(x_5070, y_5070, elevation_src, "USGS 3DEP elevation")
 
     point = Point(x_5070, y_5070)
 
     features = {}
 
+    # Compare immediate habitat with the broader neighborhood around the point.
     for radius_m in (250, 1000):
         lc_data, lc_valid_mask, _, _, _, _ = read_local_window(landcover_src, x_5070, y_5070, radius_m)
         imp_data, imp_valid_mask, _, _, _, _ = read_local_window(impervious_src, x_5070, y_5070, radius_m)
@@ -510,23 +511,13 @@ def extract_features(latitude, longitude):
         lc_values = lc_data[lc_valid_mask]
         imp_values = imp_data[imp_valid_mask]
 
-        if lc_values.size == 0:
-            features[f"forest_fraction_{radius_m}m"] = float("nan")
-            features[f"wetland_fraction_{radius_m}m"] = float("nan")
-            features[f"developed_fraction_{radius_m}m"] = float("nan")
-            features[f"open_water_fraction_{radius_m}m"] = float("nan")
-        else:
-            features[f"forest_fraction_{radius_m}m"] = fraction(lc_values, VALID_CLASSES["forest"])
-            features[f"wetland_fraction_{radius_m}m"] = fraction(lc_values, VALID_CLASSES["wetland"])
-            features[f"developed_fraction_{radius_m}m"] = fraction(lc_values, VALID_CLASSES["developed"])
-            features[f"open_water_fraction_{radius_m}m"] = fraction(lc_values, VALID_CLASSES["open_water"])
-
-        if imp_values.size == 0:
-            features[f"mean_impervious_{radius_m}m"] = float("nan")
-        else:
-            features[f"mean_impervious_{radius_m}m"] = float(np.nanmean(imp_values))
-
-    row_idx, col_idx = validate_point_is_evaluable(x_5070, y_5070, elevation_src, "USGS 3DEP elevation")
+        for habitat in ("forest", "wetland", "developed", "open_water"):
+            features[f"{habitat}_fraction_{radius_m}m"] = fraction(
+                lc_values, VALID_CLASSES[habitat]
+            )
+        features[f"mean_impervious_{radius_m}m"] = (
+            float(np.nanmean(imp_values)) if imp_values.size else float("nan")
+        )
     elevation_value = elevation_src.read(1, window=Window(col_idx, row_idx, 1, 1))[0, 0]
 
     if elevation_src.nodata is not None and elevation_value == elevation_src.nodata:
@@ -561,9 +552,8 @@ def extract_features(latitude, longitude):
         if isinstance(value, (float, np.floating)) and np.isnan(value):
             continue
 
-        if key in {"forest_fraction_250m", "forest_fraction_1000m", "wetland_fraction_250m", "wetland_fraction_1000m", "developed_fraction_250m", "developed_fraction_1000m", "open_water_fraction_250m", "open_water_fraction_1000m"}:
-            if value < 0 or value > 1:
-                raise ValueError(f"{key} must be a fraction between 0 and 1, received {value}.")
+        if "_fraction_" in key and not 0 <= value <= 1:
+            raise ValueError(f"{key} must be a fraction between 0 and 1, received {value}.")
         if key in {"distance_to_water_m", "distance_to_road_m"} and value < 0:
             raise ValueError(f"{key} must be non-negative, received {value}.")
 

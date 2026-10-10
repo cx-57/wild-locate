@@ -73,9 +73,12 @@ def _negative_signals(assessment, kind, *, terrain_only=False):
         if terrain_only and not any(term in name for term in ("slope", "rugged", "elevation", "terrain")):
             continue
         if all(_finite(row.get(key)) for key in ("effect", "current", "reference")) and row["effect"] <= -MIN_EFFECT:
-            signals.append({"feature": name, **{
-                key: float(row[key]) for key in ("current", "reference", "effect")
-            }})
+            signals.append({
+                "feature": name,
+                "current": float(row["current"]),
+                "reference": float(row["reference"]),
+                "effect": float(row["effect"]),
+            })
     return sorted(signals, key=lambda row: (row["effect"], row["feature"]))
 
 
@@ -126,10 +129,12 @@ def _candidates(features, points, center, radius_km):
              and _distance(f, center) <= radius_km * 1000 + .1]
     selected = []
     seen = set()
+    nearby_points = [p for p in points if _located(p) and p.get("status") == "ok"]
     for kind in ("road", "building", "habitat"):
         def priority(candidate):
-            nearby = [p for p in points if _located(p) and p.get("status") == "ok"]
-            closest = min(nearby, key=lambda p: _distance(p, candidate), default=None)
+            # Rank mapped features by nearby model evidence, then prefer closer,
+            # larger features when the evidence is tied.
+            closest = min(nearby_points, key=lambda p: _distance(p, candidate), default=None)
             signals = _negative_signals(closest or {}, kind)
             strength = -signals[0]["effect"] if signals else 0
             distance = _distance(candidate, closest) if closest else 0
@@ -286,6 +291,13 @@ def analyze_places(points, latitude, longitude, radius_km, region, evaluate):
             "url": "https://www.usgs.gov/3d-elevation-program",
             "coverage": "Only selected, successfully scored geographic coordinates",
         })
+    # These points are reused for every candidate, so filter them once instead
+    # of rescanning the entire Deep Dive grid for each mapped feature.
+    nearby_habitat_points = [
+        p for p in points
+        if p.get("status") == "ok" and _located(p)
+        and _finite(p.get("percentile")) and p["percentile"] >= 60
+    ]
     sites = []
     for candidate in candidates:
         site = {key: value for key, value in candidate.items() if not key.startswith("_")}
@@ -327,9 +339,11 @@ def analyze_places(points, latitude, longitude, radius_km, region, evaluate):
                 "No substantial limiting model comparison was detected at this place. "
                 "That does not mean the mapped feature has no environmental effects."
             ))
-        nearby = [p for p in points if p.get("status") == "ok" and _located(p)
-                  and _finite(p.get("percentile")) and p["percentile"] >= 60]
-        nearest = min(nearby, key=lambda p: _distance(candidate, p), default=None)
+        nearest = min(
+            nearby_habitat_points,
+            key=lambda p: _distance(candidate, p),
+            default=None,
+        )
         if nearest and _distance(candidate, nearest) <= 2000:
             site["nearby_habitat"] = {"latitude": nearest["latitude"], "longitude": nearest["longitude"],
                                       "distance_m": round(_distance(candidate, nearest)),
