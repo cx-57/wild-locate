@@ -31,7 +31,9 @@ async function browser() {
     fetch:async()=>({ok:true,status:200,json:async()=>({token:'test',authenticated:false,regions:[]})}),
     setTimeout:()=>0,setInterval:()=>0,clearInterval(){},clearTimeout(){},Blob:function(){},
   });
-  vm.runInContext(fs.readFileSync('wildlocate/web/app.js','utf8'),context);
+  for (const name of ['app', 'habitat', 'deep-dive', 'report', 'species']) {
+    vm.runInContext(fs.readFileSync(`wildlocate/web/${name}.js`, 'utf8'), context);
+  }
   await new Promise(resolve=>setImmediate(resolve));
   return {context,get,run:code=>vm.runInContext(code,context)};
 }
