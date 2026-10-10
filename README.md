@@ -57,7 +57,9 @@ Florida and Arizona use cached national raster tiles that download as needed.
 
 ## Deep Dive
 
-A completed habitat assessment can open a separate Deep Dive for the same landscape. Point assessments use a 10 km area.
+The initial assessment is deliberately compact: it shows relative suitability (or a short sampled-area summary), the **Open Deep Dive** action, and an optional collapsed section for model explanations, hypothetical scenarios, detailed scores, and validation evidence.
+
+A completed habitat assessment can open a separate Deep Dive for the same landscape. **A point assessment starts Deep Dive across the surrounding 10 km radius**, rather than analyzing only the originally selected coordinate. A regional assessment retains its chosen 10, 25, or 50 km radius. Both transitions disclose their study scope in the interface.
 
 Deep Dive is a **specific-place investigation**, not a duplicate habitat summary.
 Its main view is a map of individual roads, building footprints, habitat polygons,
