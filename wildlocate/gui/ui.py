@@ -182,7 +182,7 @@ class ChoiceBox(QComboBox):
 
     def paintEvent(self, event):
         super().paintEvent(event)
-        # Draw a chevron explicitly: styling Qt's drop-down removes its native arrow.
+        # Draw the chevron because the custom combo style hides Qt's arrow
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(QPen(QColor("#607165" if self.isEnabled() else "#8a958d"), 1.5,
