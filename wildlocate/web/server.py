@@ -32,7 +32,8 @@ VENDOR = ROOT.parent / "gui"
 ASSETS = {
     "/": ROOT / "index.html",
     "/style.css": ROOT / "style.css",
-    "/app.js": ROOT / "app.js",
+    **{f"/{name}.js": ROOT / f"{name}.js" for name in
+       ("app", "habitat", "deep-dive", "report", "species")},
 }
 DEMO_PATH = ROOT / "demo.json"
 for name in ("leaflet.js", "leaflet.css"):
