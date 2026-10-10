@@ -767,7 +767,7 @@ function initDeepDiveMap() {
   );
   tiles.on('tileerror', () => {
     $('deep-dive-map-status').hidden = false;
-    $('deep-dive-map-status').textContent = 'Map tiles are temporarily unavailable — the report is still available below';
+    $('deep-dive-map-status').textContent = 'Map imagery could not load. Mapped feature overlays and the place findings can still be inspected; check your internet connection';
   });
   tiles.on('load', () => {
     $('deep-dive-map-status').hidden = true;
@@ -962,6 +962,10 @@ function renderDeepDivePlaces(report) {
     if (site.nearby_habitat && Number.isFinite(site.nearby_habitat.distance_m) && Number.isFinite(site.nearby_habitat.percentile)) {
       researchRow(body, 'Nearby habitat sample', `${ordinal(site.nearby_habitat.percentile)} percentile · ${Math.round(site.nearby_habitat.distance_m).toLocaleString()} m away, without confirming habitat between the locations`);
     }
+    const pathways = (Array.isArray(site.potential_pathways) ? site.potential_pathways : [])
+      .filter(value => typeof value === 'string');
+    if (pathways.length) researchRow(body, 'Possible environmental interactions to verify (not measured)',
+      pathways.join(' · '));
     const checks = document.createElement('ul');
     checks.className = 'place-checks';
     for (const check of Array.isArray(site.field_checks) ? site.field_checks : []) {
