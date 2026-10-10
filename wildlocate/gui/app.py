@@ -7,10 +7,10 @@ import time
 from pathlib import Path
 from PyQt6.QtCore import QIODevice, QObject, QSaveFile, QSignalBlocker, Qt, QTimer, QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QDesktopServices, QFont, QFontDatabase, QKeySequence, QShortcut
-from PyQt6.QtWidgets import QAbstractItemView, QApplication, QBoxLayout, QDialog, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLineEdit, QMainWindow, QProgressBar, QScrollArea, QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QBoxLayout, QDialog, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLineEdit, QMainWindow, QScrollArea, QVBoxLayout, QWidget
 from wildlocate.core.registry import available_species, normalize_username
-from wildlocate.core.regional import REGIONS, get_region
-from wildlocate.gui.ui import STYLESHEET, light_palette, ordinal, coordinates, feature_display, label, divider, ChoiceBox, app_icon, BrandMark, SuitabilityGauge, Disclosure, InsightsPanel
+from wildlocate.core.regional import get_region
+from wildlocate.gui.ui import STYLESHEET, light_palette, coordinates, label, ChoiceBox, app_icon, Disclosure
 from wildlocate.gui.jobs import PredictionClient
 from wildlocate.gui.dialogs import LoginDialog, SpeciesManager, button
 from wildlocate.gui.views import ResultViewMixin
