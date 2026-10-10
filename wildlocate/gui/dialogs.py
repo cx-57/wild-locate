@@ -291,7 +291,7 @@ class SpeciesManager(QDialog):
         self.update_controls()
 
     def update_controls(self):
-        # Signals during construction can arrive before both tabs exist.
+        # Ignore early signals until both tabs have been created
         if not hasattr(self, "train_button"):
             return
         busy = self.client.busy
