@@ -262,7 +262,7 @@ test('Deep Dive opens a separate in-app workspace and preserves the habitat resu
   assert.equal(b.get('deep-dive-content').hidden,false);
   assert.match(b.get('deep-dive-title').textContent,/Bobcat/);
   assert.match(b.get('deep-dive-title').textContent,/specific places/i);
-  assert.match(b.get('deep-dive-summary').textContent,/mapped roads|mapped features/i);
+  assert.match(b.get('deep-dive-summary').textContent,/mapped (roads|features|structures)|terrain samples/i);
   assert.equal(b.get('deep-dive-loading').hidden,true);
 
   b.get('deep-dive-back').click();
