@@ -270,6 +270,20 @@ class DeepDiveAnalysisTests(unittest.TestCase):
         self.assertEqual(report["habitat"]["status"], "available")
         json.dumps(report, allow_nan=False)
 
+    def test_raster_or_outside_region_errors_do_not_abort_entire_deep_dive(self):
+        def extract(latitude, _longitude):
+            if latitude > 42:
+                raise RuntimeError("Environmental tile unavailable outside cached coverage")
+            return {"forest_fraction_250m": .6, "mean_impervious_250m": 20.}
+
+        with self.assertLogs("wildlocate.core.deep_dive", level="WARNING"):
+            report = self.analyze_points(extractor=extract)
+        self.assertEqual(report["overview"]["evaluated_points"], 1)
+        self.assertEqual(report["unavailable_points"], 2)
+        self.assertEqual([point["status"] for point in report["points"]],
+                         ["ok", "unavailable", "unavailable"])
+        json.dumps(report, allow_nan=False)
+
     def test_analysis_runs_separately_from_normal_result(self):
         model = HabitatModel()
         comparison = pd.DataFrame({
