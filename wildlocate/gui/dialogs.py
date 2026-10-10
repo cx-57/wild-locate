@@ -1,11 +1,9 @@
 """Account and species management dialogs"""
 
-import time
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QTabWidget, QVBoxLayout, QWidget
 from wildlocate.core.registry import authenticate, available_models, delete_model, enable_model, list_models, normalize_username
-from wildlocate.core.regional import get_region
-from wildlocate.gui.ui import label, app_icon, BrandMark, Disclosure, text, row
+from wildlocate.gui.ui import label, app_icon, BrandMark, Disclosure
 from wildlocate.gui.jobs import TrainingClient
 
 class LoginDialog(QDialog):
