@@ -153,48 +153,53 @@
             <p id="percentile-copy" class="percentile-copy"></p>
           </section>
 
-          <section id="point-insights" class="insight-section" hidden>
-            <h3>What shapes this score?</h3>
-            <p class="hint">Each comparison changes one condition to its typical value, with score changes shown on a 0–100 scale. These changes do not prove cause and effect.</p>
-            <div id="influence-rows" class="influence-grid"></div>
-          </section>
-          <section id="scenario-panel" class="insight-section" hidden>
-            <div class="scenario-heading"><div><h3>What if the habitat changed?</h3></div>
-              <div><label for="scenario-level">Amount of change</label><select id="scenario-level"><option value="0.1">10%</option><option value="0.25" selected>25%</option><option value="0.5">50%</option></select></div>
-            </div>
-            <p class="hint">Try changing the surrounding land cover while keeping other conditions fixed to see how the score responds. These comparisons suggest ideas to investigate, not forecasts.</p>
-            <div id="scenario-cards" class="scenario-grid" aria-live="polite"></div>
-          </section>
-          <section id="survey-panel" class="insight-section" hidden>
-            <span class="eyebrow">PLACES TO CHECK</span><h3>Where to look first</h3>
-            <p id="survey-copy" class="hint"></p><div id="survey-list" class="survey-list"></div>
-          </section>
-          <section id="evidence-panel" class="evidence-panel" hidden>
-            <h3>About these results</h3><div id="evidence-stats" class="evidence-stats"></div>
-            <p id="evidence-copy" class="hint"></p>
-            <details><summary>Sources and limitations</summary><p id="evidence-sources" class="hint"></p><p class="hint">Wildlife observations reflect where people look and report sightings, so a location without reports is not a confirmed absence. Percentiles compare scores rather than measure confidence.</p></details>
-          </section>
-          <p id="next-step" class="next-step"></p>
-          <p id="result-note" class="hint"></p>
-          <details id="scores">
-            <summary>View all scores</summary>
-            <div class="table-scroll">
-              <table>
-                <caption class="sr-only">Individual habitat assessment results</caption>
-                <thead><tr><th>Location</th><th>Score</th><th>Percentile</th><th>Suitability</th></tr></thead>
-                <tbody id="score-rows"></tbody>
-              </table>
-            </div>
-          </details>
-          <details id="conditions" hidden><summary>Conditions at this location</summary><dl id="feature-values"></dl></details>
-          <p class="disclaimer">Scores compare habitat conditions without telling you whether an animal is present, and area results describe sampled locations rather than every place between them.</p>
           <section id="deep-dive-cta" class="deep-dive-cta">
             <div>
               <h3>Take a closer look</h3>
-              <p id="deep-dive-cta-copy" class="hint">Analyze this area in more detail</p>
+              <p id="deep-dive-cta-copy" class="hint">Investigate roads, buildings, and terrain around this location</p>
             </div>
             <button id="deep-dive-launch" type="button" class="deep-dive-launch">Open Deep Dive <span aria-hidden="true">→</span></button>
           </section>
+          <p class="disclaimer">Suitability is relative to comparison locations, not the probability an animal is currently present. Regional maps show samples, not continuous coverage.</p>
+          <details id="assessment-details" class="assessment-details">
+            <summary>Optional model details and supporting data</summary>
+            <div class="assessment-details-body">
+              <section id="point-insights" class="insight-section" hidden>
+                <h3>What shapes this score?</h3>
+                <p class="hint">Each comparison changes one condition to its typical value, with score changes shown on a 0–100 scale. These changes do not prove cause and effect.</p>
+                <div id="influence-rows" class="influence-grid"></div>
+              </section>
+              <section id="scenario-panel" class="insight-section" hidden>
+                <div class="scenario-heading"><div><h3>What if the habitat changed?</h3></div>
+                  <div><label for="scenario-level">Amount of change</label><select id="scenario-level"><option value="0.1">10%</option><option value="0.25" selected>25%</option><option value="0.5">50%</option></select></div>
+                </div>
+                <p class="hint">Try changing the surrounding land cover while keeping other conditions fixed to see how the score responds. These comparisons suggest ideas to investigate, not forecasts.</p>
+                <div id="scenario-cards" class="scenario-grid" aria-live="polite"></div>
+              </section>
+              <section id="survey-panel" class="insight-section" hidden>
+                <span class="eyebrow">PLACES TO CHECK</span><h3>Where to look first</h3>
+                <p id="survey-copy" class="hint"></p><div id="survey-list" class="survey-list"></div>
+              </section>
+              <section id="evidence-panel" class="evidence-panel" hidden>
+                <h3>About these results</h3><div id="evidence-stats" class="evidence-stats"></div>
+                <p id="evidence-copy" class="hint"></p>
+                <details><summary>Sources and limitations</summary><p id="evidence-sources" class="hint"></p><p class="hint">Wildlife observations reflect where people look and report sightings, so a location without reports is not a confirmed absence. Percentiles compare scores rather than measure confidence.</p></details>
+              </section>
+              <p id="next-step" class="next-step"></p>
+              <p id="result-note" class="hint"></p>
+              <details id="scores">
+                <summary>View all scores</summary>
+                <div class="table-scroll">
+                  <table>
+                    <caption class="sr-only">Individual habitat assessment results</caption>
+                    <thead><tr><th>Location</th><th>Score</th><th>Percentile</th><th>Suitability</th></tr></thead>
+                    <tbody id="score-rows"></tbody>
+                  </table>
+                </div>
+              </details>
+              <details id="conditions" hidden><summary>Conditions at this location</summary><dl id="feature-values"></dl></details>
+            </div>
+          </details>
         </div>
       </div>
     </section>
@@ -209,6 +214,7 @@
     <span class="eyebrow">SPECIFIC-PLACE ANALYSIS</span>
     <h1 id="deep-dive-title" tabindex="-1">Investigate mapped places</h1>
     <p id="deep-dive-meta"></p>
+    <p id="deep-dive-scope-note" class="deep-dive-scope-note"></p>
     <p id="deep-dive-demo-note" class="notice" hidden></p>
   </section>
 
