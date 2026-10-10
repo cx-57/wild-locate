@@ -21,6 +21,7 @@ from wildlocate.core.registry import (
     delete_model,
     enable_model,
     list_models,
+    model_health,
 )
 from wildlocate.core.regional import REGIONS, get_region
 from wildlocate.core.observations import species_suggestions
@@ -33,6 +34,7 @@ ASSETS = {
     "/style.css": ROOT / "style.css",
     "/app.js": ROOT / "app.js",
 }
+DEMO_PATH = ROOT / "demo.json"
 for name in ("leaflet.js", "leaflet.css"):
     ASSETS["/vendor/" + name] = VENDOR / name
 
@@ -423,6 +425,7 @@ def model_summaries(region, username):
             "source": "Custom" if record.custom else "Bundled",
             "enabled": record.id in active_ids,
             "created_at": record.created_at,
+            **model_health(record),
         }
         try:
             metrics = record.metrics()
@@ -551,9 +554,9 @@ class Handler(BaseHTTPRequestHandler):
                     "center": region.center,
                     "species": (
                         list(available_species(code, username=username))
-                        if username
-                        else []
                     ),
+                    "unavailable_models": [r.species for r in list_models(code, username=username)
+                                           if not model_health(r)["ready"]],
                 }
                 for code, region in REGIONS.items()
             ],
@@ -588,6 +591,13 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(200, self.config_payload())
             return
 
+        if path == "/api/demo":
+            if not DEMO_PATH.is_file():
+                self.reply(503, {"error": "The recorded example is unavailable. Choose a species and run a live assessment."})
+            else:
+                self.reply(200, json.loads(DEMO_PATH.read_text(encoding="utf-8")))
+            return
+
         if path == "/api/models":
             username = self.require_auth()
             if username is None:
@@ -606,8 +616,6 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path.startswith("/api/jobs/"):
-            if self.require_auth() is None:
-                return
             try:
                 self.reply(
                     200, self.server.jobs.status(path.removeprefix("/api/jobs/"))
@@ -624,8 +632,6 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path.startswith("/api/deep-dives/"):
-            if self.require_auth() is None:
-                return
             identifier = path.removeprefix("/api/deep-dives/")
             if "/" in identifier:
                 self.reply(404, {"error": "Not found."})
@@ -696,9 +702,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200, self.config_payload())
                 return
 
-            username = self.require_auth()
-            if username is None:
-                return
+            # Bundled habitat analysis is available without creating an account.
+            # Account-owned training/model operations remain authenticated below.
+            username = self.username()
 
             if path == "/api/jobs":
                 request = validate_request(payload, username)
@@ -734,6 +740,10 @@ class Handler(BaseHTTPRequestHandler):
                     len("/api/deep-dives/") : -len("/cancel")
                 ]
                 self.reply(200, self.server.deep_dives.cancel(identifier))
+                return
+
+            username = self.require_auth()
+            if username is None:
                 return
 
             if path == "/api/models/enable":

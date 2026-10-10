@@ -457,6 +457,9 @@ class JobTests(unittest.TestCase):
 
 class ServerTests(unittest.TestCase):
     def setUp(self):
+        # HTTP protocol tests do not depend on a bundled artifact's library version.
+        self.enterContext(patch('wildlocate.core.registry.model_health', return_value={'ready': True}))
+        self.enterContext(patch('wildlocate.web.server.model_health', return_value={'ready': True}))
         self.server = create_server(0)
         # Most server tests exercise the signed-in application. Authentication
         # itself is covered separately without touching a real local account DB.
@@ -530,7 +533,11 @@ class ServerTests(unittest.TestCase):
 
     def test_login_logout_and_auth_gate(self):
         self.server.username = None
-        self.assertEqual(self.request('POST', '/api/jobs', PAYLOAD)[0], 401)
+        self.assertEqual(self.request('GET', '/api/models')[0], 401)
+        self.assertEqual(self.request('POST', '/api/training/start', {'region': 'MA', 'query': 'Fisher'})[0], 401)
+        with patch.object(self.server.jobs, 'start', return_value={'id': 'guest-job', 'status': 'running'}) as start:
+            self.assertEqual(self.request('POST', '/api/jobs', PAYLOAD)[0], 202)
+            start.assert_called_once_with(PAYLOAD, username=None)
         with patch('wildlocate.web.server.authenticate', return_value='alice') as authenticate:
             status, data = self.request(
                 'POST', '/api/auth/login',
@@ -544,6 +551,15 @@ class ServerTests(unittest.TestCase):
         status, data = self.request('POST', '/api/auth/logout', {})
         self.assertEqual(status, 200)
         self.assertFalse(json.loads(data)['authenticated'])
+
+    def test_recorded_example_is_accessible_without_an_account(self):
+        self.server.username = None
+        status, data = self.request('GET', '/api/demo')
+        self.assertEqual(status, 200)
+        demo = json.loads(data)
+        self.assertEqual(demo['point']['species'], 'Fisher')
+        self.assertEqual(len(demo['area']['points']), 81)
+        self.assertIn('recorded_at', demo)
 
     def test_forbidden_requests_and_paths(self):
         self.assertEqual(self.request('POST', '/api/jobs', PAYLOAD, {'X-Wildlocate-Token': ''})[0], 403)

@@ -41,9 +41,11 @@ async function browser() {
       getElementById:get,
       createElement:element,
       querySelector:()=>element(),
+      querySelectorAll:()=>[],
       body:element(),
     },
-    window:{confirm:()=>true,scrollTo(){}},
+    window:{confirm:()=>true,scrollTo(){},print(){}},
+    Map,
     console, Date, Number, Object, String, Math, JSON, Error,
     encodeURIComponent,
     Option:function(name,value){this.value=value;this.textContent=name;},
@@ -256,8 +258,8 @@ test('Deep Dive opens a separate in-app workspace and preserves the habitat resu
   assert.equal(b.get('deep-dive-page').hidden,false);
   assert.equal(b.get('deep-dive-content').hidden,false);
   assert.match(b.get('deep-dive-title').textContent,/Bobcat/);
-  assert.match(textOf(b.get('deep-dive-strengths')),/forest fraction 1 km/i);
-  assert.match(textOf(b.get('deep-dive-constraints')),/mean impervious 1 km/i);
+  assert.match(textOf(b.get('deep-dive-strengths')),/forest cover 1 km/i);
+  assert.match(textOf(b.get('deep-dive-constraints')),/impervious surface 1 km/i);
   assert.match(textOf(b.get('deep-dive-pressures')),/Development/);
 
   b.get('deep-dive-back').click();
@@ -283,4 +285,45 @@ test('Point analyses expand to a 10 km Deep Dive area',async()=>{
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(request.radius_km,10);
   assert.match(b.get('deep-dive-meta').textContent,/10 km/);
+});
+
+test('Scenario percentages render their exact outcomes, including a decline',async()=>{
+  const b=await browser();
+  b.get('scenario-level').value='0.25';
+  b.context.assessment={...complete.result,insights:{influences:[],scenarios:[
+    {title:'Reduce impervious surface by 25%',fraction:.25,percentile:40,delta:-.05,changes:[{feature:'mean_impervious_250m',before:40,after:30}]},
+    {title:'Reduce impervious surface by 50%',fraction:.5,percentile:70,delta:.2,changes:[]},
+  ]}};
+  b.run('showResult(assessment)');
+  assert.equal(b.get('scenario-cards').children.length,1);
+  assert.match(textOf(b.get('scenario-cards')),/40th percentile/);
+  assert.match(textOf(b.get('scenario-cards')),/-10 percentile points/);
+  assert.match(textOf(b.get('scenario-cards')),/40.0% → 30.0%/);
+  b.get('scenario-level').value='0.5';
+  b.get('scenario-level').handlers.change();
+  assert.match(textOf(b.get('scenario-cards')),/70th percentile/);
+});
+
+test('Survey shortlist excludes missing samples and sorts by within-model rank',async()=>{
+  const b=await browser();
+  b.context.assessment={...complete.result,analysis_type:'regional',radius_km:10,grid_spacing_km:2,evaluated_points:2,points:[
+    {latitude:42,longitude:-72,status:'unavailable',percentile:100},
+    {latitude:42.1,longitude:-72,status:'ok',percentile:30,score:.2,category:'Low'},
+    {latitude:42.2,longitude:-72,status:'ok',percentile:90,score:.8,category:'Very High'},
+  ]};
+  b.run('showResult(assessment)');
+  assert.equal(b.get('survey-list').children.length,2);
+  assert.match(textOf(b.get('survey-list').children[0]),/90th/);
+  b.context.assessment.points=[];
+  b.run('showResult(assessment)');
+  assert.equal(b.get('survey-panel').hidden,true);
+});
+
+test('Recorded example preserves its origin and does not sign into an account',async()=>{
+  const b=await browser();
+  b.context.fetch=async()=>response({recorded_at:'2026-10-10T00:00:00Z',point:{...complete.result,region:'MA'}});
+  await b.get('try-example').click();
+  assert.match(b.get('assessment-origin').textContent,/Recorded Amherst example/);
+  assert.equal(b.run('regional'),false);
+  assert.equal(b.get('result').hidden,false);
 });

@@ -32,6 +32,7 @@
       <button class="text-button auth-switch" id="auth-switch" type="button">New here? Create an account</button>
     </form>
     <p class="auth-note">Accounts and custom models stay on this computer.</p>
+    <button id="auth-back" class="text-button" type="button">Continue exploring without an account →</button>
   </div>
 </section>
 
@@ -45,15 +46,19 @@
   </nav>
   <nav class="top-actions" aria-label="Account">
     <span id="account-name" class="account-name"></span>
-    <button id="sign-out" type="button" class="text-button">Sign out</button>
+    <button id="sign-out" type="button" class="text-button">Sign in</button>
   </nav>
 </header>
 
 <main id="explore-page">
   <section class="intro">
     <span class="eyebrow">HABITAT EXPLORER</span>
-    <h1>Find where wildlife can thrive.</h1>
-    <p>Choose a species and location to analyze habitat suitability.</p>
+    <h1>Find habitat. Understand it. Explore what could change.</h1>
+    <p>Habitat intelligence for community conservation. Shortlist field-survey sites and test land-cover hypotheses with species-specific machine learning.</p>
+    <div class="example-actions">
+      <button id="try-example" class="secondary compact" type="button">Try the Amherst example ↗</button>
+      <button id="try-area-example" class="text-button" type="button">Explore its 10 km landscape →</button>
+    </div>
   </section>
 
   <div class="workspace">
@@ -70,15 +75,15 @@
           <div class="line"></div>
           <label>Analysis type</label>
           <div class="segmented" role="group" aria-label="Analysis type">
-            <button type="button" id="point-mode" aria-pressed="false">Single point</button>
-            <button type="button" id="area-mode" aria-pressed="true">Surrounding area</button>
+            <button type="button" id="point-mode" aria-pressed="true">Single point</button>
+            <button type="button" id="area-mode" aria-pressed="false">Surrounding area</button>
           </div>
 
-          <div id="radius-field">
+          <div id="radius-field" hidden>
             <label for="radius">Radius</label>
             <select id="radius">
-              <option value="10">10 km</option>
-              <option value="25" selected>25 km</option>
+              <option value="10" selected>10 km</option>
+              <option value="25">25 km</option>
               <option value="50">50 km</option>
             </select>
             <p class="hint">81 sample points across the surrounding landscape.</p>
@@ -92,8 +97,8 @@
           <details class="manual">
             <summary>Enter coordinates</summary>
             <div class="coordinate-inputs">
-              <div><label for="latitude">Latitude</label><input id="latitude" type="number" step="any" min="-90" max="90" value="42.3718" required></div>
-              <div><label for="longitude">Longitude</label><input id="longitude" type="number" step="any" min="-180" max="180" value="-72.2820" required></div>
+              <div><label for="latitude">Latitude</label><input id="latitude" type="number" step="any" min="-90" max="90" value="42.3732" required></div>
+              <div><label for="longitude">Longitude</label><input id="longitude" type="number" step="any" min="-180" max="180" value="-72.5199" required></div>
             </div>
           </details>
         </fieldset>
@@ -119,8 +124,9 @@
         <div id="result" hidden>
           <div class="result-title">
             <div><span class="eyebrow" id="result-kind"></span><h2 id="result-title"></h2></div>
-            <button id="export" type="button" class="text-button">Export JSON ↓</button>
+            <div class="result-actions"><button id="print-report" type="button" class="text-button">Print / save PDF</button><button id="export" type="button" class="text-button">Export JSON ↓</button></div>
           </div>
+          <p id="assessment-origin" class="assessment-origin" role="status"></p>
           <div id="metrics" class="metrics"></div>
 
           <section id="point-percentile" class="percentile-card" hidden aria-label="Relative habitat percentile">
@@ -140,6 +146,28 @@
             <p id="percentile-copy" class="percentile-copy"></p>
           </section>
 
+          <section id="point-insights" class="insight-section" hidden>
+            <h3>What is shaping this score?</h3>
+            <p class="hint">Each comparison replaces one condition with its typical training value. These separate model sensitivities do not add up or prove causation.</p>
+            <div id="influence-rows" class="influence-grid"></div>
+          </section>
+          <section id="scenario-panel" class="insight-section" hidden>
+            <div class="scenario-heading"><div><span class="eyebrow">HYPOTHESIS LAB</span><h3>What if this landscape changed?</h3></div>
+              <div><label for="scenario-level">Relative change</label><select id="scenario-level"><option value="0.1">10%</option><option value="0.25" selected>25%</option><option value="0.5">50%</option></select></div>
+            </div>
+            <p class="hint">Explore hypothetical changes to the 250 m and 1 km environmental summaries. Other features stay fixed; this is not a parcel design or a forecast of restoration success.</p>
+            <div id="scenario-cards" class="scenario-grid" aria-live="polite"></div>
+          </section>
+          <section id="survey-panel" class="insight-section" hidden>
+            <span class="eyebrow">FIELD-SURVEY SHORTLIST</span><h3>Three samples to investigate first</h3>
+            <p id="survey-copy" class="hint"></p><div id="survey-list" class="survey-list"></div>
+          </section>
+          <section id="evidence-panel" class="evidence-panel" hidden>
+            <h3>Evidence behind this assessment</h3><div id="evidence-stats" class="evidence-stats"></div>
+            <p id="evidence-copy" class="hint"></p>
+            <details><summary>Data sources and interpretation</summary><p id="evidence-sources" class="hint"></p><p class="hint">Background observations are not confirmed absences. Citizen-science sampling bias remains. Percentiles use the fitted model's comparison dataset; they are not confidence estimates.</p></details>
+          </section>
+          <p id="next-step" class="next-step"></p>
           <p id="result-note" class="hint"></p>
           <div id="legend" class="legend" aria-label="Suitability categories">
             <span><i class="very-low"></i>Very low</span><span><i class="low"></i>Low</span>

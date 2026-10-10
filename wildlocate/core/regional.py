@@ -35,7 +35,7 @@ class Region:
 
 
 REGIONS = {
-    'MA': Region('MA', 'Massachusetts', (-73.60, 41.10, -69.80, 42.95), (42.3718, -72.2820), 2),
+    'MA': Region('MA', 'Massachusetts', (-73.60, 41.10, -69.80, 42.95), (42.3732, -72.5199), 2),
     'FL': Region('FL', 'Florida', (-87.70, 24.35, -79.85, 31.10), (28.1, -81.6), 21,
                  ('Nine-banded Armadillo', 'Marsh Rabbit', 'Hispid Cotton Rat')),
     'AZ': Region('AZ', 'Arizona', (-114.90, 31.20, -108.95, 37.10), (32.25, -110.9), 40,

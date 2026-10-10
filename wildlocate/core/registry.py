@@ -2,6 +2,7 @@
 
 import csv
 from dataclasses import dataclass
+from functools import lru_cache
 import hashlib
 import hmac
 import json
@@ -11,6 +12,7 @@ import re
 import shutil
 import sqlite3
 import uuid
+import warnings
 
 import wildlocate
 
@@ -147,6 +149,43 @@ def complete(record):
         return False
 
 
+@lru_cache(maxsize=128)
+def _artifact_health(model_path, metrics_path, features_path, fingerprint):
+    """Smoke-test trusted local artifacts; invalidate when any artifact changes."""
+    import joblib
+    import numpy as np
+    import pandas as pd
+    try:
+        metadata = json.loads(Path(metrics_path).read_text(encoding="utf-8"))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            model = joblib.load(model_path)
+        # Tiny inference batches do not benefit from hundreds of worker threads.
+        for name in model.get_params():
+            if name.endswith("n_jobs"):
+                model.set_params(**{name: 1})
+        frame = pd.read_csv(features_path, nrows=1)[metadata["predictor_names"]]
+        values = model.predict_proba(frame)
+        if values.shape != (1, 2) or not np.isfinite(values).all():
+            raise ValueError("Invalid prediction")
+        return {"ready": True}
+    except Exception as exc:
+        return {
+            "ready": False,
+            "reason": "This artifact cannot run with the installed ML libraries. Retrain this species or restore a compatible model.",
+            "error_type": type(exc).__name__,
+        }
+
+
+def model_health(record):
+    try:
+        paths = (record.model_path, record.metrics_path, record.features_path)
+        fingerprint = tuple((p.stat().st_mtime_ns, p.stat().st_size) for p in paths)
+        return dict(_artifact_health(*(str(p) for p in paths), fingerprint))
+    except OSError:
+        return {"ready": False, "reason": "Model files are missing. Restore or retrain this species."}
+
+
 def custom_record(identifier, *, username=None):
     username = normalize_username(username)
     folder = _child(custom_root(username), identifier)
@@ -206,10 +245,10 @@ def _activation(username):
 
 def available_models(region="MA", *, username=None):
     records = list_models(region, username=username)
-    available = {r.species.casefold(): r for r in records if not r.custom}
+    available = {r.species.casefold(): r for r in records if not r.custom and model_health(r)["ready"]}
     active = _activation(username)
     for record in records:
-        if record.custom and active.get(_activation_key(record)) == record.id:
+        if record.custom and active.get(_activation_key(record)) == record.id and model_health(record)["ready"]:
             available[record.species.casefold()] = record
     return available
 
@@ -237,6 +276,9 @@ def enable_model(identifier, *, username=None):
     if identifier not in records:
         raise ValueError("This model is incomplete or no longer available.")
     record = records[identifier]
+    health = model_health(record)
+    if not health["ready"]:
+        raise ValueError(health["reason"])
     active = _activation(username)
     if record.custom:
         active[_activation_key(record)] = record.id

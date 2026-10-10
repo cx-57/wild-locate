@@ -215,7 +215,7 @@ def analyze_deep_dive(species, latitude, longitude, radius_km, region="MA", *, u
         )
         try:
             point["influences"] = habitat_insights(
-                model, frame, comparison, comparison_scores, score
+                model, frame, comparison, comparison_scores, score, include_scenarios=False
             ).get("influences", [])
         except Exception:
             point["influences"] = []

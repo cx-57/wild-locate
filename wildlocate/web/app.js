@@ -4,7 +4,7 @@ const $ = id => document.getElementById(id);
 
 let config = null;
 let token = null;
-let regional = true;
+let regional = false;
 let busy = false;
 let activeJob = null;
 let result = null;
@@ -13,6 +13,7 @@ let started = 0;
 let elapsedTimer = null;
 let map = null;
 let overlay = null;
+const sampleMarkers = new Map();
 let authCreate = false;
 
 let deepDiveJobId = null;
@@ -105,6 +106,7 @@ function setAuthMode(create) {
 }
 
 $('auth-switch').addEventListener('click', () => setAuthMode(!authCreate));
+$('auth-back').addEventListener('click', () => enterApp(false));
 
 $('auth-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -133,6 +135,11 @@ $('auth-form').addEventListener('submit', async event => {
 });
 
 $('sign-out').addEventListener('click', async () => {
+  if (!config?.authenticated) {
+    setAuthMode(false);
+    showAuth();
+    return;
+  }
   try {
     const data = await api('/api/auth/logout', {});
     config = data;
@@ -151,7 +158,7 @@ $('sign-out').addEventListener('click', async () => {
   $('deep-dive-page').hidden = true;
   $('explore-page').hidden = false;
   setAuthMode(false);
-  showAuth();
+  enterApp(false);
 });
 
 function initMap() {
@@ -198,13 +205,14 @@ function initMap() {
 }
 
 function enterApp(preserveSelection = false) {
-  if (!config || !config.authenticated) {
+  if (!config) {
     showAuth();
     return;
   }
   $('auth-screen').hidden = true;
   $('app-shell').hidden = false;
-  $('account-name').textContent = config.username;
+  $('account-name').textContent = config.username || 'Local exploration';
+  $('sign-out').textContent = config.authenticated ? 'Sign out' : 'Sign in';
   showSection('explore');
   initMap();
   applyConfig(config, preserveSelection);
@@ -216,10 +224,14 @@ function applyConfig(data, preserveSelection = true) {
   const previousSpecies = preserveSelection ? $('species').value : '';
   config = data;
   token = data.token;
-  $('account-name').textContent = data.username || '';
+  $('account-name').textContent = data.username || 'Local exploration';
 
   $('region').replaceChildren(
-    ...data.regions.map(state => new Option(state.name, state.code))
+    ...data.regions.map(state => {
+      const option = new Option(state.species.length ? state.name : `${state.name} · train a model first`, state.code);
+      option.disabled = !state.species.length;
+      return option;
+    })
   );
   $('species-region').replaceChildren(
     ...data.regions.map(state => new Option(state.name, state.code))
@@ -239,12 +251,6 @@ function applyConfig(data, preserveSelection = true) {
 
 async function refreshConfig(preserveSelection = true) {
   const data = await api('/api/config');
-  if (!data.authenticated) {
-    config = data;
-    token = data.token;
-    showAuth();
-    return;
-  }
   applyConfig(data, preserveSelection);
 }
 
@@ -278,6 +284,9 @@ function setBusy(value) {
   $('inputs').disabled = value || !config;
   $('train-species-nav').disabled = value;
   $('models-nav').disabled = value;
+  $('try-example').disabled = value;
+  $('try-area-example').disabled = value;
+  $('sign-out').disabled = value;
   $('analyze').disabled = value || !$('species').value;
   $('cancel').hidden = !value;
   $('cancel').disabled = !activeJob;
@@ -320,6 +329,7 @@ function draw(recenter = false) {
   $('selected-location').textContent = valid ? coords(lat, lon) : 'Enter valid coordinates';
   if (!map) return;
   overlay.clearLayers();
+  sampleMarkers.clear();
   if (!valid || Math.abs(lat) > 85) return;
 
   const center = [lat, lon];
@@ -361,14 +371,17 @@ function draw(recenter = false) {
       (ok
         ? `${point.category} · score ${number(point.score)} · percentile ${point.percentile}`
         : 'Unavailable: outside coverage or incomplete data');
-    L.circleMarker([point.latitude, point.longitude], {
-      radius: regional ? 4 : 7,
+    const rank = surveySamples(result).findIndex(p => p.latitude === point.latitude && p.longitude === point.longitude) + 1;
+    const marker = L.circleMarker([point.latitude, point.longitude], {
+      radius: rank ? 9 : (regional ? 4 : 7),
       color,
-      weight: 0.6,
+      weight: rank ? 2 : 0.6,
       fillColor: color,
       fillOpacity: 0.85,
       bubblingMouseEvents: false,
     }).bindPopup(popup).addTo(overlay);
+    if (rank) marker.bindTooltip(String(rank), {permanent: true, direction: 'center', className: 'sample-rank'});
+    sampleMarkers.set(`${point.latitude},${point.longitude}`, marker);
   }
 }
 
@@ -399,8 +412,8 @@ function changeRegion(resetLocation = true, preferredSpecies = '') {
   $('species').replaceChildren(...state.species.map(name => new Option(name, name)));
   if (state.species.includes(currentSpecies)) {
     $('species').value = currentSpecies;
-  } else if (state.species.includes('Bobcat')) {
-    $('species').value = 'Bobcat';
+  } else if (state.species.includes('Fisher')) {
+    $('species').value = 'Fisher';
   }
 
   if (resetLocation) {
@@ -411,6 +424,9 @@ function changeRegion(resetLocation = true, preferredSpecies = '') {
   $('species-note').textContent = state.species.length
     ? `${state.species.length} enabled species model${state.species.length === 1 ? '' : 's'} available.`
     : 'No enabled model for this state. Train or enable a model.';
+  if (state.unavailable_models?.length) {
+    $('species-note').textContent += ` ${state.unavailable_models.join(', ')} unavailable in this runtime; inspect the model library to retrain.`;
+  }
   $('analyze').disabled = !state.species.length;
   changed(resetLocation);
 }
@@ -435,10 +451,14 @@ function showResult(data) {
   $('result-title').textContent = area
     ? `${data.species} · ${data.radius_km} km radius`
     : data.species;
+  $('assessment-origin').textContent = data.recorded_at
+    ? `Recorded Amherst example · generated ${data.recorded_at.slice(0, 10)} · use Analyze habitat to recompute locally`
+    : 'Live assessment · computed locally from environmental data';
   $('metrics').replaceChildren();
 
   if (area) {
-    metric(number(data.mean_score), 'Mean suitability score');
+    const scored = (data.points || []).filter(p => p.status === 'ok' && Number.isFinite(p.percentile));
+    metric(scored.length ? ordinal(scored.reduce((sum, p) => sum + p.percentile, 0) / scored.length) : '—', 'Mean relative percentile');
     metric(String(data.evaluated_points), 'Points scored');
     metric(`${data.grid_spacing_km} km`, 'Grid spacing');
     if (data.unavailable_points) metric(String(data.unavailable_points), 'Unavailable');
@@ -449,7 +469,7 @@ function showResult(data) {
 
     const percentile = Math.max(0, Math.min(100, Number(data.percentile) || 0));
     $('point-percentile').hidden = false;
-    $('percentile-value').textContent = `${Math.round(percentile)}th percentile`;
+    $('percentile-value').textContent = `${ordinal(percentile)} percentile`;
     $('percentile-category').textContent = data.category || '';
     $('percentile-marker').style.left = `${percentile}%`;
     $('percentile-track').setAttribute('aria-valuenow', String(percentile));
@@ -491,8 +511,8 @@ function showResult(data) {
   for (const [name, value] of Object.entries(data.features || {})) {
     const term = document.createElement('dt');
     const detail = document.createElement('dd');
-    term.textContent = name.replaceAll('_', ' ');
-    detail.textContent = number(value);
+    term.textContent = friendlyFeature(name);
+    detail.textContent = featureValue(name, value);
     $('feature-values').append(term, detail);
   }
 
@@ -502,11 +522,171 @@ function showResult(data) {
   $('status').textContent = area
     ? 'Assessment complete. Select a map point for details.'
     : 'Assessment complete.';
+  renderPointInsights(data);
+  renderEvidence(data);
+  renderSurvey(data);
+  $('legend').hidden = !area;
+  $('next-step').textContent = area
+    ? 'Next: use these samples to plan field checks. Verify access, habitat on the ground, and local expertise before choosing survey sites.'
+    : 'Next: explore a hypothetical change, then discuss the result with local conservation experts and verify conditions in the field.';
   draw();
 }
 
+function featureValue(name, value) {
+  if (!Number.isFinite(value)) return 'Unavailable';
+  if (name.includes('fraction')) return `${(value * 100).toFixed(1)}%`;
+  if (name.includes('impervious')) return `${value.toFixed(1)}%`;
+  if (name.includes('slope')) return `${value.toFixed(1)}°`;
+  if (name.includes('distance') || name.includes('elevation') || name.includes('ruggedness')) return `${Math.round(value).toLocaleString()} m`;
+  return value.toFixed(3);
+}
+
+function renderPointInsights(data) {
+  const insights = data.insights;
+  $('point-insights').hidden = data.analysis_type === 'regional' || !insights;
+  $('influence-rows').replaceChildren();
+  if (insights?.error) researchRow($('influence-rows'), 'Interpretation unavailable', insights.error);
+  for (const item of (insights?.influences || []).slice(0, 4)) {
+    researchRow($('influence-rows'), friendlyFeature(item.feature),
+      `Here: ${featureValue(item.feature, item.current)} · typical: ${featureValue(item.feature, item.reference)}. ` +
+      `${item.effect >= 0 ? 'Raises' : 'Lowers'} the score by ${Math.abs(item.effect).toFixed(3)} compared with that replacement.`);
+  }
+  $('scenario-panel').hidden = data.analysis_type === 'regional' || !insights || Boolean(insights.error);
+  renderScenarios();
+}
+
+function renderScenarios() {
+  const parent = $('scenario-cards');
+  parent.replaceChildren();
+  const fraction = Number($('scenario-level').value || .25);
+  const scenarios = (result?.insights?.scenarios || []).filter(s => s.fraction === fraction);
+  for (const scenario of scenarios) {
+    const card = document.createElement('article');
+    card.className = 'scenario-card';
+    const title = document.createElement('h4');
+    title.textContent = scenario.title;
+    const comparison = document.createElement('div');
+    comparison.className = 'scenario-comparison';
+    const baseline = document.createElement('span');
+    baseline.textContent = `${ordinal(result.percentile)} →`;
+    const outcome = document.createElement('strong');
+    outcome.textContent = `${ordinal(scenario.percentile)} percentile`;
+    comparison.append(baseline, outcome);
+    const caption = document.createElement('p');
+    caption.className = 'hint';
+    const delta = scenario.percentile - result.percentile;
+    caption.textContent = `${delta > 0 ? '+' : ''}${delta} percentile points · model score ${scenario.delta >= 0 ? '+' : ''}${scenario.delta.toFixed(3)}`;
+    card.append(title, comparison, caption);
+    for (const change of scenario.changes) {
+      const p = document.createElement('p');
+      p.className = 'scenario-change';
+      p.textContent = `${friendlyFeature(change.feature)}: ${featureValue(change.feature, change.before)} → ${featureValue(change.feature, change.after)}`;
+      card.append(p);
+    }
+    if (scenario.outside_training_range?.length) {
+      const warning = document.createElement('p');
+      warning.className = 'notice';
+      warning.textContent = 'Some hypothetical values fall outside the training range. Treat this result cautiously.';
+      card.append(warning);
+    }
+    parent.append(card);
+  }
+  if (!scenarios.length) researchRow(parent, 'No supported change at this setting',
+    'This location has no applicable developed-cover or impervious-surface change, or this model lacks the required features.');
+}
+
+function renderEvidence(data) {
+  const e = data.evidence;
+  $('evidence-panel').hidden = !e;
+  $('evidence-stats').replaceChildren();
+  if (!e) return;
+  const parent = $('evidence-stats');
+  parent.append(reviewStat('Species observations', Number(e.presence_count).toLocaleString()),
+    reviewStat('Spatial validation', e.folds ? `${e.folds} folds · ${e.spatial_block_km} km blocks` : 'Not recorded'),
+    reviewStat('PR-AUC / prevalence reference', `${number(e.pr_auc)} / ${number(e.pr_reference)}`),
+    reviewStat('ROC-AUC', number(e.roc_auc)));
+  $('evidence-copy').textContent = e.interpretation;
+  $('evidence-sources').textContent = `Sources: ${(e.sources || []).join(' · ')}. ${data.model} · ${data.region}.`;
+}
+
+function surveySamples(data) {
+  if (data?.analysis_type !== 'regional') return [];
+  return (data.points || []).filter(p => p.status === 'ok' && Number.isFinite(p.percentile))
+    .sort((a, b) => b.percentile - a.percentile || b.score - a.score).slice(0, 3);
+}
+
+function renderSurvey(data) {
+  const samples = surveySamples(data);
+  $('survey-panel').hidden = !samples.length;
+  $('survey-list').replaceChildren();
+  $('survey-copy').textContent = `Ranked among the evaluated grid samples for ${data.species}. Samples are spaced approximately ${data.grid_spacing_km} km apart; this is not continuous coverage or a parcel recommendation.`;
+  samples.forEach((point, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'survey-sample';
+    const strong = document.createElement('strong');
+    strong.textContent = `${index + 1}. ${ordinal(point.percentile)} percentile · ${point.category}`;
+    const detail = document.createElement('span');
+    detail.textContent = `${coords(point.latitude, point.longitude)} · Locate on map ↗`;
+    button.append(strong, detail);
+    button.addEventListener('click', () => {
+      if (!map) return;
+      map.setView([point.latitude, point.longitude], 13);
+      sampleMarkers.get(`${point.latitude},${point.longitude}`)?.openPopup();
+      $('map').scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+    $('survey-list').append(button);
+  });
+}
+
+$('scenario-level').addEventListener('change', renderScenarios);
+$('print-report').addEventListener('click', () => {
+  if (!result) return;
+  const closed = [...document.querySelectorAll('#result details:not([open])')];
+  closed.forEach(detail => { detail.open = true; });
+  window.print();
+  closed.forEach(detail => { detail.open = false; });
+});
+
+async function loadExample(area = false) {
+  if (busy || deepDiveBusy) return;
+  $('try-example').disabled = true;
+  $('try-area-example').disabled = true;
+  error('');
+  try {
+    const demo = await api('/api/demo');
+    const assessment = area ? demo.area : demo.point;
+    $('region').value = 'MA';
+    changeRegion(false, assessment.species);
+    $('latitude').value = assessment.latitude;
+    $('longitude').value = assessment.longitude;
+    $('radius').value = '10';
+    mode(area);
+    $('scenario-level').value = '0.25';
+    showResult({...assessment, recorded_at: demo.recorded_at});
+    draw(true);
+    $('result').scrollIntoView({behavior: 'smooth', block: 'start'});
+  } catch (exc) { error(exc.message); }
+  finally {
+    $('try-example').disabled = false;
+    $('try-area-example').disabled = false;
+  }
+}
+$('try-example').addEventListener('click', () => loadExample(false));
+$('try-area-example').addEventListener('click', () => loadExample(true));
+
 function friendlyFeature(name) {
   return name
+    .replace('forest_fraction', 'Forest cover')
+    .replace('developed_fraction', 'Developed cover')
+    .replace('wetland_fraction', 'Wetland cover')
+    .replace('open_water_fraction', 'Open water')
+    .replace('mean_impervious', 'Impervious surface')
+    .replace('distance_to_water_m', 'Distance to water')
+    .replace('distance_to_road_m', 'Distance to roads')
+    .replace('elevation_m', 'Elevation')
+    .replace('mean_slope', 'Mean slope')
+    .replace('terrain_ruggedness', 'Terrain ruggedness')
     .replaceAll('_', ' ')
     .replace(/\b250m\b/g, '250 m')
     .replace(/\b1000m\b/g, '1 km');
@@ -741,7 +921,6 @@ async function startDeepDive() {
 
   deepDiveRevision += 1;
   const version = deepDiveRevision;
-  deepDiveReport = null;
   deepDiveJobId = null;
   $('deep-dive-content').hidden = true;
   $('deep-dive-error').hidden = true;
@@ -964,9 +1143,13 @@ function renderModelReview() {
   }
 
   $('review-species').textContent = record.species;
+  if (record.ready === false) {
+    $('model-message').textContent = record.reason || 'This artifact is unavailable. Retrain it before use.';
+    $('model-message').hidden = false;
+  }
   $('review-details').append(
     reviewStat('Source', record.source),
-    reviewStat('Status', record.enabled ? 'Enabled' : (record.custom ? 'Ready for review' : 'Available'))
+    reviewStat('Status', record.ready === false ? 'Unavailable in this runtime' : (record.enabled ? 'Enabled' : (record.custom ? 'Ready for review' : 'Available')))
   );
 
   if (!record.details_error) {
@@ -994,7 +1177,7 @@ function renderModelReview() {
     $('review-details').append(note);
   }
 
-  $('enable-model').disabled = record.enabled;
+  $('enable-model').disabled = record.enabled || record.ready === false;
   $('retrain-model').disabled = false;
   $('delete-model').disabled = !record.custom;
 }
@@ -1015,7 +1198,7 @@ function renderModels(selectId = null) {
     const name = document.createElement('strong');
     name.textContent = record.species;
     const meta = document.createElement('span');
-    const status = record.enabled
+    const status = record.ready === false ? 'Unavailable · retrain to restore' : record.enabled
       ? 'Enabled'
       : (record.custom ? 'Ready for review' : 'Available');
     const created = record.created_at
@@ -1048,6 +1231,12 @@ async function loadModels(selectId = null) {
 }
 
 async function openSpeciesStudio(focus = 'train') {
+  if (!config?.authenticated) {
+    setAuthMode(false);
+    showAuth();
+    $('auth-copy').textContent = 'Sign in to train species and manage your private model library. Habitat exploration is available without an account.';
+    return;
+  }
   if (busy || deepDiveBusy) return;
   managerRegion = $('region').value || 'MA';
 
@@ -1398,12 +1587,7 @@ async function init() {
     const data = await api('/api/config');
     config = data;
     token = data.token;
-    if (data.authenticated) {
-      enterApp(false);
-    } else {
-      setAuthMode(false);
-      showAuth();
-    }
+    enterApp(false);
   } catch (_) {
     $('auth-screen').hidden = false;
     authError('Could not connect to Wild-Locate. Check that the terminal server is still running, then reload this page.');
