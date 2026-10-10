@@ -360,8 +360,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200, self.config_payload())
                 return
 
-            # Bundled habitat analysis is available without creating an account.
-            # Account-owned training/model operations remain authenticated below.
+            # Habitat analysis works without an account
+            # Training and model changes still require sign-in
             username = self.username()
 
             if path == "/api/jobs":
