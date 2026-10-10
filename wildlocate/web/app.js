@@ -839,9 +839,10 @@ function renderDeepDive(report) {
   const evaluated = overview.evaluated_points ?? 0;
   const total = overview.total_points ?? report.sample_points ?? evaluated;
   const mapped = report.places?.mapped_features ?? 0;
-  $('deep-dive-summary').textContent = mapped
-    ? `Examined ${mapped} mapped features around this location. Select a place below to inspect nearby environmental conditions and model comparisons.`
-    : 'No mapped roads, buildings or habitat polygons could be confirmed in the searched neighborhoods. This does not mean they are absent.';
+  const terrain = report.places?.terrain_samples ?? 0;
+  $('deep-dive-summary').textContent = mapped || terrain
+    ? `Investigate ${mapped} mapped features and ${terrain} terrain samples around your location. Select a place below to examine the model evidence and local environmental context.`
+    : 'Mapped structures and usable terrain samples could not be confirmed here. This does not mean roads, buildings or habitat features are absent.';
   $('deep-dive-coverage-note').textContent =
     `${evaluated} of ${total} habitat samples had usable environmental data. ` +
     'Mapped features are searched only within selected neighborhoods; neither the map nor the models provide complete coverage of the study area.';
@@ -896,7 +897,7 @@ function renderDeepDivePlaces(report) {
   const radii = [...new Set(areas.filter(area => Number.isFinite(area.radius_m)).map(area => area.radius_m / 1000))];
   const size = radii.length === 1 ? `${radii[0]} km radius ` : '';
   $('deep-dive-places-coverage').textContent = places
-    ? `${areas.length} selected ${size}neighborhood${areas.length === 1 ? '' : 's'} for search · ${places.mapped_features ?? 0} mapped features · ${places.assessed_features ?? 0} evaluated` +
+    ? `${areas.length} selected ${size}neighborhood${areas.length === 1 ? '' : 's'} for search · ${places.mapped_features ?? 0} mapped features · ${places.terrain_samples ?? 0} terrain samples · ${places.assessed_features ?? 0} evaluated` +
       (places.failed_evaluations ? ` · ${places.failed_evaluations} evaluations failed` : '') +
       ' · This is a partial map search, not an inventory of all places in the area'
     : '';
@@ -937,8 +938,8 @@ function renderDeepDivePlaces(report) {
       : positive
       ? `+${(positive.effect * 100).toFixed(1)} model-score points · supporting local condition`
       : site.assessment_status === 'unavailable'
-      ? 'Mapped feature · local model assessment unavailable'
-      : 'Mapped feature · no substantial model limitation identified';
+      ? `${site.terrain_sample ? 'Terrain sample' : 'Mapped feature'} · local model assessment unavailable`
+      : `${site.terrain_sample ? 'Terrain sample' : 'Mapped feature'} · no substantial model limitation identified`;
     const caption = document.createElement('p');
     caption.className = 'place-caption';
     caption.textContent = strongest ? friendlyFeature(strongest.feature)
