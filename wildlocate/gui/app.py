@@ -10,7 +10,7 @@ from PyQt6.QtGui import QDesktopServices, QFont, QFontDatabase, QKeySequence, QS
 from PyQt6.QtWidgets import QAbstractItemView, QApplication, QBoxLayout, QDialog, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLineEdit, QMainWindow, QProgressBar, QScrollArea, QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 from wildlocate.core.registry import available_species, normalize_username
 from wildlocate.core.regional import REGIONS, get_region
-from wildlocate.gui.ui import STYLESHEET, light_palette, ordinal, coordinates, feature_display, label, divider, ChoiceBox, app_icon, BrandMark, SuitabilityGauge, Disclosure, text, row, InsightsPanel
+from wildlocate.gui.ui import STYLESHEET, light_palette, ordinal, coordinates, feature_display, label, divider, ChoiceBox, app_icon, BrandMark, SuitabilityGauge, Disclosure, InsightsPanel
 from wildlocate.gui.jobs import PredictionClient
 from wildlocate.gui.dialogs import LoginDialog, SpeciesManager, button
 
