@@ -3,7 +3,7 @@
 import math
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap
-from PyQt6.QtWidgets import QAbstractItemView, QComboBox, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget, QMainWindow, QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QStyledItemDelegate, QTableWidget, QTabWidget, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton, QStyledItemDelegate, QTabWidget, QVBoxLayout, QWidget
 
 # Application palette and stylesheet
 
