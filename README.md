@@ -57,29 +57,34 @@ Florida and Arizona use cached national raster tiles that download as needed.
 
 ## Deep Dive
 
-A completed habitat assessment can open a separate Deep Dive for the same landscape. Point assessments use a 10 km area.
+The initial assessment is deliberately compact: it shows relative suitability (or a short sampled-area summary), the **Open Deep Dive** action, and an optional collapsed section for model explanations, hypothetical scenarios, detailed scores, and validation evidence.
 
-Deep Dive resamples 81 locations and summarizes:
+A completed habitat assessment can open a separate Deep Dive for the same landscape. **A point assessment starts Deep Dive across the surrounding 10 km radius**, rather than analyzing only the originally selected coordinate. A regional assessment retains its chosen 10, 25, or 50 km radius. Both transitions disclose their study scope in the interface.
 
-- usable sample coverage and missing data;
-- habitat percentiles, suitability distribution, and directional comparisons;
-- supporting and limiting conditions, with explanation coverage;
-- three ranked locations to check in the field, linked to the map;
-- specific mapped roads, building footprints, habitat areas, and terrain
-  locations with model comparisons, measurements, source links, and field checks;
-- training evidence, expandable model-check explanations, and data sources.
+Deep Dive is a **specific-place investigation**, not a duplicate habitat summary.
+Its main view is a map of individual roads, building footprints, habitat polygons,
+and terrain sampling coordinates. Clicking a place shows the corresponding
+geometry, species-model assessment, limiting or supporting environmental
+conditions, possible mechanisms to investigate, source links, and field checks.
+
+The supporting spatial sample grid remains behind the scenes to locate useful
+search neighborhoods. Coverage and training/validation evidence are disclosed,
+but regional direction rankings, generic distribution charts, and landscape
+pressure lists are **not** part of the Deep Dive interface.
 
 Reports can be exported as JSON or printed/saved as PDF. Both maps support scrolling and trackpad pinch zoom. Point examples are recorded results; opening Deep Dive runs a fresh analysis with local data.
 
 These are model interpretations, not proof of ecological causation.
 
 Specific places use the existing local machine-learning model, without a paid
-AI service or API key. Deep Dive selects up to six 1 km search neighborhoods
-from the landscape samples, retrieves bounded OpenStreetMap geometry through
-Overpass, and evaluates up to six mapped candidates of each type plus three
-existing terrain samples. The shortlist shows up to three places of each type.
-It ranks the strongest relevant negative single-condition comparison at each
-location, without adding overlapping effects into a damage score.
+AI service or API key. Deep Dive searches the selected center and up to five additional 1 km
+neighborhoods, retrieves bounded OpenStreetMap geometry through Overpass,
+and evaluates up to six mapped candidates of each kind plus two real raster-scored
+terrain coordinates. It displays up to three roads, three buildings, and three
+habitat/terrain sites (with a cap of two terrain samples). Sites with neutral
+or unavailable model comparisons remain visible rather than disappearing.
+Comparisons are ranked by their strongest relevant negative individual
+condition, without adding overlapping effects into a damage score.
 
 The model measures surrounding conditions, usually within 250 m or 1 km;
 it cannot establish that an individual structure caused ecological harm or

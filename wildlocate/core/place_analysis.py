@@ -13,18 +13,16 @@ MAX_CANDIDATES_PER_KIND = 6
 MAX_SITES_PER_KIND = 3
 MIN_EFFECT = .001  # 0.1 score points; smaller differences round into noise.
 METHOD = (
-    "The local habitat model checks conditions at each selected place, using "
-    "the same environmental data as the landscape report. Places are ranked "
-    "by their strongest relevant negative single-condition comparison, "
-    "rather than by adding overlapping effects."
+    "Roads, buildings and mapped habitat polygons are located using "
+    "OpenStreetMap or available local data. The species model evaluates environmental "
+    "conditions near each feature. Each comparison replaces one environmental "
+    "variable at a time with its reference value; correlated effects are not added."
 )
 LIMITATIONS = (
-    "These comparisons describe surrounding conditions, usually within 250 m "
-    "or 1 km, and cannot attribute damage to an individual road or building. "
-    "The shortlist covers selected mapped places rather than every structure "
-    "in the area; natural terrain limits are not evidence of human damage. "
-    "Mapping and environmental datasets can have different dates, and the "
-    "nearest road measured by the model may differ from the mapped road."
+    "Surrounding conditions are measured at approximately 250 m or 1 km scales. "
+    "Model associations cannot establish that an individual road or building "
+    "caused ecological damage or predict the effect of removing it. Search "
+    "coverage is partial; maps and environmental data can be incomplete or dated."
 )
 
 
@@ -96,7 +94,9 @@ def select_search_areas(points, latitude, longitude, radius_km):
                            for group in ((kind,) if kind else ("road", "building", "habitat")))]
         return max(effects, default=0)
 
-    areas = []
+    # Examine the chosen center first, not just locations selected by the model.
+    areas = [{"latitude": float(latitude), "longitude": float(longitude),
+              "radius_m": SEARCH_RADIUS_M}]
 
     def add_first(candidates):
         for p in candidates:
@@ -151,24 +151,40 @@ def _candidates(features, points, center, radius_km):
 
 
 def _terrain_candidates(points):
-    eligible = [p for p in points if p.get("status") == "ok" and _located(p)
-                and p.get("insight_status") != "unavailable"
-                and _negative_signals(p, "habitat", terrain_only=True)]
-    eligible.sort(key=lambda p: (_negative_signals(p, "habitat", terrain_only=True)[0]["effect"],
-                                 p["latitude"], p["longitude"]))
+    """Identify real raster-scored coordinates, not invented named map features."""
+    candidates = []
+    for point in points:
+        if (point.get("status") != "ok" or not _located(point)
+                or point.get("insight_status") == "unavailable"):
+            continue
+        rows = point.get("influences")
+        if not isinstance(rows, list):
+            continue
+        terrain = [row for row in rows if isinstance(row, dict)
+                   and isinstance(row.get("feature"), str)
+                   and any(term in row["feature"]
+                           for term in ("slope", "rugged", "elevation", "terrain"))
+                   and all(_finite(row.get(key)) for key in ("effect", "current", "reference"))
+                   and abs(row["effect"]) >= MIN_EFFECT]
+        if terrain:
+            strength = max(abs(row["effect"]) for row in terrain)
+            candidates.append((strength, point))
+    candidates.sort(key=lambda item: (-item[0], item[1]["latitude"], item[1]["longitude"]))
     selected = []
-    for p in eligible:
-        if all(_distance(p, old["_sample"]) >= 500 for old in selected):
-            selected.append({
-                "id": f"terrain:{p['latitude']:.6f}:{p['longitude']:.6f}",
-                "kind": "habitat", "name": f"Terrain near {p['latitude']:.4f}, {p['longitude']:.4f}",
-                "latitude": p["latitude"], "longitude": p["longitude"],
-                "geometry": {"type": "Point", "coordinates": [p["longitude"], p["latitude"]]},
-                "source": "Local USGS elevation data", "source_url": "https://www.usgs.gov/3d-elevation-program",
-                "tags": {}, "_sample": p,
-            })
-            if len(selected) == MAX_SITES_PER_KIND:
-                break
+    for _, point in candidates:
+        if any(_distance(point, existing["_sample"]) < 500 for existing in selected):
+            continue
+        selected.append({
+            "id": f"terrain:{point['latitude']:.6f}:{point['longitude']:.6f}",
+            "kind": "habitat",
+            "name": f"Terrain sample at {point['latitude']:.4f}, {point['longitude']:.4f}",
+            "latitude": point["latitude"], "longitude": point["longitude"],
+            "geometry": {"type": "Point", "coordinates": [point["longitude"], point["latitude"]]},
+            "source": "USGS 3DEP terrain model", "source_url": "https://www.usgs.gov/3d-elevation-program",
+            "tags": {}, "_sample": point,
+        })
+        if len(selected) == 2:
+            break
     return selected
 
 
@@ -205,6 +221,28 @@ def _field_checks(kind, terrain_sample=False):
             "Treat natural terrain as habitat context rather than evidence of damage"]
 
 
+def _possible_pathways(kind, terrain_sample=False):
+    """Questions suggested by feature type, NOT observed or quantified effects."""
+    if kind == "road":
+        return [
+            "Potential movement barrier or wildlife-vehicle collision risk; requires field or traffic evidence",
+            "Possible nearby impervious surface and drainage changes; requires site verification",
+        ]
+    if kind == "building":
+        return [
+            "Potential habitat-cover replacement around the footprint; confirm current land cover",
+            "Possible runoff or lighting effects; not measured by the habitat model",
+        ]
+    if terrain_sample:
+        return [
+            "Slopes and landforms can influence drainage, travel routes and microhabitats; "
+            "these effects are not directly measured here",
+        ]
+    return [
+        "Potential habitat connectivity or water/vegetation function; verify current conditions",
+    ]
+
+
 def analyze_places(points, latitude, longitude, radius_km, region, evaluate):
     """Score selected real places; preserve the landscape report on mapping failure."""
     center = {"latitude": latitude, "longitude": longitude}
@@ -235,28 +273,60 @@ def analyze_places(points, latitude, longitude, radius_km, region, evaluate):
     features = mapping.get("features", [])
     report["mapped_features"] = len(features)
     candidates = _candidates(features, points, center, radius_km)
-    candidates += [p for p in _terrain_candidates(points)
-                   if _distance(p, center) <= radius_km * 1000 + .1]
+    # Terrain coordinates are sampled from real elevation rasters, not invented
+    # buildings or mapped polygons. Keep their origin clearly distinguished.
+    terrain_candidates = [item for item in _terrain_candidates(points)
+                          if _distance(item, center) <= radius_km * 1000 + .1]
+    candidates.extend(terrain_candidates)
     report["candidate_features"] = len(candidates)
+    report["terrain_samples"] = len(terrain_candidates)
+    if terrain_candidates:
+        report["sources"].append({
+            "name": "USGS 3DEP elevation-derived terrain samples",
+            "url": "https://www.usgs.gov/3d-elevation-program",
+            "coverage": "Only selected, successfully scored geographic coordinates",
+        })
     sites = []
     for candidate in candidates:
+        site = {key: value for key, value in candidate.items() if not key.startswith("_")}
+        is_terrain = "_sample" in candidate
+        site.update(signals=[], supporting_signals=[], strongest_signal_points=0.0,
+                    assessment_status="unavailable", terrain_sample=is_terrain,
+                    potential_pathways=_possible_pathways(candidate["kind"], is_terrain),
+                    field_checks=_field_checks(candidate["kind"], is_terrain))
         try:
-            assessment = candidate.get("_sample") or evaluate(candidate["latitude"], candidate["longitude"])
+            assessment = candidate["_sample"] if is_terrain else evaluate(candidate["latitude"], candidate["longitude"])
             _validate_assessment(assessment)
         except Exception:
             report["failed_evaluations"] += 1
-            logger.warning("Specific-place evaluation unavailable for %s", candidate.get("id"))
+            logger.warning("Specific-place model assessment unavailable for %s", candidate.get("id"))
+            site["assessment_note"] = (
+                "This feature is mapped, but environmental data or model explanations "
+                "were unavailable here. No ecological effect can be inferred.")
+            sites.append(site)
             continue
         report["assessed_features"] += 1
-        signals = _negative_signals(assessment, candidate["kind"], terrain_only="_sample" in candidate)
-        if not signals:
-            continue
-        site = {key: value for key, value in candidate.items() if not key.startswith("_")}
-        site.update(score=float(assessment["score"]), percentile=float(assessment["percentile"]),
-                    category=assessment.get("category", ""), signals=signals[:3],
-                    strongest_signal_points=-signals[0]["effect"] * 100,
-                    terrain_sample="_sample" in candidate,
-                    field_checks=_field_checks(candidate["kind"], "_sample" in candidate))
+        negative = _negative_signals(assessment, candidate["kind"], terrain_only=is_terrain)
+        positive = sorted(
+            ({"feature": row["feature"], "effect": float(row["effect"]),
+              "current": float(row["current"]), "reference": float(row["reference"])}
+             for row in assessment["influences"]
+             if _relevant(candidate["kind"], row["feature"]) and row["effect"] >= MIN_EFFECT
+             and (not is_terrain or any(term in row["feature"]
+                                       for term in ("slope", "rugged", "elevation", "terrain")))),
+            key=lambda row: (-row["effect"], row["feature"]))
+        site.update(
+            assessment_status="available",
+            score=float(assessment["score"]), percentile=float(assessment["percentile"]),
+            category=assessment.get("category", ""), signals=negative[:3],
+            supporting_signals=positive[:3],
+            strongest_signal_points=-negative[0]["effect"] * 100 if negative else 0.0,
+            assessment_note=(
+                "Nearby environmental conditions have model-linked limiting factors."
+                if negative else
+                "No substantial limiting model comparison was detected at this place. "
+                "That does not mean the mapped feature has no environmental effects."
+            ))
         nearby = [p for p in points if p.get("status") == "ok" and _located(p)
                   and _finite(p.get("percentile")) and p["percentile"] >= 60]
         nearest = min(nearby, key=lambda p: _distance(candidate, p), default=None)
@@ -265,26 +335,40 @@ def analyze_places(points, latitude, longitude, radius_km, region, evaluate):
                                       "distance_m": round(_distance(candidate, nearest)),
                                       "percentile": nearest["percentile"]}
         sites.append(site)
-    sites.sort(key=lambda p: (-p["strongest_signal_points"], _distance(p, center), str(p["id"])))
+    # Prefer places with evidence of limiting conditions, but never hide real
+    # features merely because their modeled association is neutral or unknown.
+    sites.sort(key=lambda p: (p["assessment_status"] != "available",
+                              -p["strongest_signal_points"], _distance(p, center), str(p["id"])))
     counts = {kind: 0 for kind in ("road", "building", "habitat")}
+    terrain_count = 0
+    mapped_habitat_count = 0
     for site in sites:
-        if counts[site["kind"]] < MAX_SITES_PER_KIND:
-            site["rank"] = len(report["sites"]) + 1
-            report["sites"].append(site)
-            counts[site["kind"]] += 1
+        if counts[site["kind"]] >= MAX_SITES_PER_KIND:
+            continue
+        if site["kind"] == "habitat":
+            if site["terrain_sample"]:
+                if terrain_count >= 2:
+                    continue
+                terrain_count += 1
+            else:
+                if mapped_habitat_count >= 2:
+                    continue
+                mapped_habitat_count += 1
+        site["rank"] = len(report["sites"]) + 1
+        report["sites"].append(site)
+        counts[site["kind"]] += 1
     if report["failed_evaluations"]:
         report["warnings"].append(f"Model comparisons were unavailable for {report['failed_evaluations']} selected places")
     if report["sites"]:
         report["status"] = "partial" if report["mapping_status"] != "available" or report["failed_evaluations"] else "available"
         report["summary"] = (
-            f"{len(report['sites'])} places stand out among {report['assessed_features']} evaluated locations "
-            "because nearby conditions lower the model score relative to typical conditions"
+            f"{len(report['sites'])} locations or terrain samples are available for "
+            f"inspection; {report['assessed_features']} of {report['candidate_features']} "
+            "selected candidates had usable local model assessments."
         )
-    elif report["assessed_features"]:
-        report["status"] = "no_signal"
-        report["summary"] = "No relevant negative model signal stood out among the evaluated places; this does not establish that the area is free of habitat pressures"
+    elif report["mapping_status"] == "unavailable":
+        report["summary"] = "Mapping unavailable: mapped roads and buildings could not be retrieved here; this does not mean they are absent."
     else:
-        report["summary"] = "Place-level comparisons are unavailable; the landscape results above are still usable"
-    if any("_sample" in candidate for candidate in candidates):
-        report["sources"].append({"name": "USGS 3DEP elevation", "url": "https://www.usgs.gov/3d-elevation-program"})
+        report["status"] = "no_signal"
+        report["summary"] = "No supported mapped places were found in the searched neighborhoods; map coverage is incomplete."
     return report

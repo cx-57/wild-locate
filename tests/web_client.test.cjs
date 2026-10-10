@@ -261,9 +261,9 @@ test('Deep Dive opens a separate in-app workspace and preserves the habitat resu
   assert.equal(b.get('deep-dive-page').hidden,false);
   assert.equal(b.get('deep-dive-content').hidden,false);
   assert.match(b.get('deep-dive-title').textContent,/Bobcat/);
-  assert.match(textOf(b.get('deep-dive-strengths')),/forest cover within 1 km/i);
-  assert.match(textOf(b.get('deep-dive-constraints')),/pavement and rooftops within 1 km/i);
-  assert.match(textOf(b.get('deep-dive-pressures')),/Development/);
+  assert.match(b.get('deep-dive-title').textContent,/specific places/i);
+  assert.match(b.get('deep-dive-summary').textContent,/mapped (roads|features|structures)|terrain samples/i);
+  assert.equal(b.get('deep-dive-loading').hidden,true);
 
   b.get('deep-dive-back').click();
   assert.equal(b.get('explore-page').hidden,false);
@@ -288,6 +288,53 @@ test('Point analyses expand to a 10 km Deep Dive area',async()=>{
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(request.radius_km,10);
   assert.match(b.get('deep-dive-meta').textContent,/10 km/);
+});
+
+test('Point results keep percentile and Deep Dive visible with optional details collapsed',async()=>{
+  const b=await browser();
+  b.context.assessment={...complete.result,insights:{influences:[],scenarios:[]}};
+  b.run('showResult(assessment)');
+  assert.equal(b.get('point-percentile').hidden,false);
+  assert.equal(b.get('percentile-value').textContent,'50th percentile');
+  assert.equal(b.get('assessment-details').open,false);
+  assert.match(b.get('deep-dive-cta-copy').textContent,/one point|10 km radius|not just this point/i);
+  const html=fs.readFileSync('wildlocate/web/index.html','utf8');
+  assert.ok(html.indexOf('id="deep-dive-cta"') < html.indexOf('id="assessment-details"'));
+  assert.ok(html.indexOf('id="assessment-details"') < html.indexOf('id="point-insights"'));
+  assert.ok(html.indexOf('id="assessment-details"') < html.indexOf('id="scenario-panel"'));
+  assert.ok(html.indexOf('id="assessment-details"') < html.indexOf('id="evidence-panel"'));
+  b.get('assessment-details').open=true;
+  b.run('showResult(assessment)');
+  assert.equal(b.get('assessment-details').open,false,'New assessment should reset to compact view');
+});
+
+test('Point-to-region transition explicitly describes 10 km analysis in Deep Dive',async()=>{
+  const b=await browser();
+  b.context.assessment={...complete.result,region:'MA'};
+  b.run('showResult(assessment)');
+  b.context.fetch=async(path)=>path==='/api/deep-dives'
+    ? response({id:'point-radius',status:'running'})
+    : response({status:'complete',result:{...deepDiveReport,radius_km:10}});
+  await b.get('deep-dive-launch').click();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.match(b.get('deep-dive-scope-note').textContent,/Started from one point/);
+  assert.match(b.get('deep-dive-scope-note').textContent,/10 km radius/);
+  assert.match(b.get('deep-dive-scope-note').textContent,/not just that coordinate/);
+});
+
+test('Regional overview keeps its chosen radius and details collapsed',async()=>{
+  const b=await browser();
+  b.context.assessment={...complete.result,analysis_type:'regional',radius_km:25,
+    evaluated_points:2,points:[{latitude:42.37,longitude:-72.28,status:'ok',percentile:50,score:.5,category:'Moderate'}]};
+  b.run('showResult(assessment)');
+  assert.equal(b.get('metrics').hidden,false);
+  assert.equal(b.get('assessment-details').open,false);
+  assert.match(b.get('deep-dive-cta-copy').textContent,/25 km region/);
+  assert.doesNotMatch(b.get('deep-dive-cta-copy').textContent,/10 km radius/);
+  b.run("deepDiveSource=assessment");
+  b.context.report={...deepDiveReport,radius_km:25};
+  b.run('renderDeepDive(report)');
+  assert.match(b.get('deep-dive-scope-note').textContent,/original 25 km radius/);
 });
 
 test('Scenario percentages render their exact outcomes, including a decline',async()=>{
@@ -369,41 +416,30 @@ test('A late Deep Dive start cannot restore a job after leaving the account',asy
   assert.equal(b.run('deepDiveBusy'),false);
 });
 
-test('Deep Dive explains partial sample coverage and renders distribution and survey locations',async()=>{
+test('Deep Dive discloses incomplete spatial coverage and keeps validation accessible',async()=>{
   const b=await browser();
   b.context.report={...deepDiveReport,
     unavailable_points:21,
-    overview:{...deepDiveReport.overview,evaluated_points:60,total_points:81,
-      coverage_percentage:74.074,median_percentile:70,min_percentile:10,max_percentile:95,
-      high_suitability_points:40,high_suitability_percentage:66.667},
-    distribution:[{category:'Very Low',count:10,percentage:16.667},{category:'High',count:40,percentage:66.667}],
-    sectors:[{name:'Northwest',mean_percentile:77,points:10}],
-    survey_priorities:[{rank:1,latitude:42.4,longitude:-72.3,score:.9,percentile:95,category:'Very High',sector:'Northwest',distance_km:3.2}],
-    habitat:{...deepDiveReport.habitat,status:'available',explanation_points:60,failed_explanations:0},
+    overview:{...deepDiveReport.overview,evaluated_points:60,total_points:81},
     evidence:{presence_count:405,background_count:810,folds:5,spatial_block_km:10,roc_auc:.82,pr_auc:.71,
-      sources:['iNaturalist research-grade observations'],interpretation:'Spatial validation against sampled background.'},
+      sources:['iNaturalist research-grade observations']},
   };
   b.run('renderDeepDive(report)');
   assert.match(b.get('deep-dive-coverage-note').textContent,/60.*81/);
-  assert.match(b.get('deep-dive-coverage-note').textContent,/21.*unavailable/i);
-  assert.match(textOf(b.get('deep-dive-distribution')),/High.*40/);
-  assert.match(textOf(b.get('deep-dive-sectors')),/Northwest.*77th/);
-  assert.match(textOf(b.get('deep-dive-survey-list')),/95th/);
-  assert.match(textOf(b.get('deep-dive-survey-list')),/42\.4000/);
+  assert.match(b.get('deep-dive-coverage-note').textContent,/partial|incomplete|limited|selected/i);
   assert.match(textOf(b.get('deep-dive-evidence-stats')),/405/);
   assert.match(b.get('deep-dive-evidence-sources').textContent,/iNaturalist/);
 });
 
-test('Deep Dive distinguishes unavailable explanations from genuinely neutral model signals',async()=>{
-  const b=await browser();
-  b.context.report={...deepDiveReport,habitat:{status:'unavailable',explanation_points:0,failed_explanations:81,strengths:[],constraints:[]},pressures:[]};
-  b.run('renderDeepDive(report)');
-  assert.match(b.get('deep-dive-insight-note').textContent,/unavailable|could not be calculated/i);
-  assert.doesNotMatch(textOf(b.get('deep-dive-strengths')),/no consistent positive/i);
-  assert.doesNotMatch(textOf(b.get('deep-dive-pressures')),/no consistent negative/i);
-  b.context.report.habitat={status:'available',explanation_points:81,failed_explanations:0,strengths:[],constraints:[]};
-  b.run('renderDeepDive(report)');
-  assert.match(textOf(b.get('deep-dive-strengths')),/no.*positive|neutral/i);
+test('Deep Dive no longer presents directional charts or generic pressure summaries',async()=>{
+  const html=fs.readFileSync('wildlocate/web/index.html','utf8');
+  const page=html.slice(html.indexOf('<main id="deep-dive-page"'),html.indexOf('<main id="species-page"'));
+  assert.match(page,/deep-dive-places-list/);
+  assert.match(page,/deep-dive-map/);
+  assert.doesNotMatch(page,/deep-dive-distribution|deep-dive-sectors|deep-dive-strengths|deep-dive-pressures|deep-dive-survey-list/);
+  const mapPosition=page.indexOf('id="deep-dive-map"');
+  const contentPosition=page.indexOf('id="deep-dive-content"');
+  assert.ok(mapPosition < contentPosition,'The map must be visible while the report is loading');
 });
 
 test('Recorded examples label the Deep Dive transition as a live analysis',async()=>{
@@ -463,27 +499,18 @@ test('The remaining example works after removing the redundant area-example cont
   assert.equal(b.get('analyze').disabled,false);
 });
 
-test('A Deep Dive without usable samples never claims that scoring succeeded',async()=>{
+test('A Deep Dive without habitat samples can still show a mapped-place view',async()=>{
   const b=await browser();
   b.context.report={...deepDiveReport,
     overview:{evaluated_points:0,total_points:81,unavailable_points:81},
-    habitat:{status:'unavailable',explanation_points:0,failed_explanations:0,strengths:[],constraints:[]},
-    pressures:[],sectors:[],survey_priorities:[],distribution:[],points:[]};
+    points:[],places:{status:'partial',mapped_features:2,assessed_features:0,
+      sites:[{id:'road-1',kind:'road',name:'Mapped road',latitude:42.37,longitude:-72.28,
+        signals:[],assessment_status:'unavailable',field_checks:[]}]}};
   b.run('renderDeepDive(report)');
-  assert.match(b.get('deep-dive-summary').textContent,/No locations could be evaluated/);
-  const explanations=b.get('deep-dive-insight-note').textContent+textOf(b.get('deep-dive-strengths'));
-  assert.doesNotMatch(explanations,/scores remain usable|scores were calculated/);
-  assert.match(explanations,/no.*scor|no.*evaluat/i);
-});
-
-test('Directional overview limits its leading-sector claim to sufficiently sampled directions',async()=>{
-  const b=await browser();
-  b.context.report={...deepDiveReport,
-    overview:{...deepDiveReport.overview,strongest_sector:{name:'South',mean_percentile:50,points:3}},
-    sectors:[{name:'North',mean_percentile:90,points:2},{name:'South',mean_percentile:50,points:3}]};
-  b.run('renderDeepDive(report)');
-  assert.match(b.get('deep-dive-summary').textContent,/at least three|3 or more/);
-  assert.doesNotMatch(b.get('deep-dive-summary').textContent,/lead this landscape/);
+  assert.match(b.get('deep-dive-coverage-note').textContent,/0 of 81/);
+  assert.match(b.get('deep-dive-summary').textContent,/2 mapped features/);
+  assert.match(textOf(b.get('deep-dive-places-list')),/Mapped road/);
+  assert.match(textOf(b.get('deep-dive-places-list')),/unavailable/i);
 });
 
 test('Evidence labels background counts accurately in both reports',async()=>{

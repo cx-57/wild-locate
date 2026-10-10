@@ -41,4 +41,4 @@ jobs:
       - name: Check browser JavaScript
         run: node --check wildlocate/web/app.js
       - name: Browser regression tests
-        run: node --test tests/web_client.test.cjs
+        run: node --test tests/web_client.test.cjs tests/web_places.test.cjs
