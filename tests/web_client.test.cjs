@@ -74,7 +74,9 @@ async function browser({missingIds=[]}={}) {
     URL:{createObjectURL:()=> 'blob:test', revokeObjectURL(){}},
   });
 
-  vm.runInContext(fs.readFileSync('wildlocate/web/app.js','utf8'),context);
+  for (const name of ['app', 'habitat', 'deep-dive', 'report', 'species']) {
+    vm.runInContext(fs.readFileSync(`wildlocate/web/${name}.js`, 'utf8'), context);
+  }
   await new Promise(resolve=>setImmediate(resolve));
   return {context,get,run:code=>vm.runInContext(code,context)};
 }
