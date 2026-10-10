@@ -589,7 +589,7 @@ class MainWindow(QMainWindow):
             self.species.setPlaceholderText("No enabled models — open Manage species")
             if self.species.findText(selected) >= 0:
                 self.species.setCurrentText(selected)
-        # A new model for the same species also invalidates the previous result.
+        # Clear the old result when the species model changes
         self.inputs_changed()
         self.analyze_button.setEnabled(bool(self.species.count()))
         if self.species.count() and self.result is None:
