@@ -338,13 +338,16 @@ def _clipped_geometry(geometry, kind, forward, reverse, inspected):
     clipped = projected.intersection(inspected)
     if clipped.is_empty:
         return None
+    allowed = (
+        {"LineString", "MultiLineString"}
+        if kind == "road"
+        else {"Polygon", "MultiPolygon"}
+    )
     if clipped.geom_type == "GeometryCollection":
-        allowed = {"LineString", "MultiLineString"} if kind == "road" else {"Polygon", "MultiPolygon"}
         parts = [part for part in clipped.geoms if part.geom_type in allowed and not part.is_empty]
         if not parts:
             return None
         clipped = unary_union(parts)
-    allowed = {"LineString", "MultiLineString"} if kind == "road" else {"Polygon", "MultiPolygon"}
     if clipped.geom_type not in allowed or not clipped.is_valid:
         return None
     measure = clipped.length if kind == "road" else clipped.area
@@ -386,14 +389,18 @@ def _parse_features(elements, areas, forward, reverse, inspected):
             identifier = element.get("id")
             if isinstance(identifier, bool) or not isinstance(identifier, int) or identifier <= 0:
                 raise ValueError("Invalid map identifier")
-            key = f"osm:{element_type}:{identifier}"
-            if key in seen:
+            feature_id = f"osm:{element_type}:{identifier}"
+            if feature_id in seen:
                 continue
-            seen.add(key)
+            seen.add(feature_id)
             raw_tags = element.get("tags", {})
             if not isinstance(raw_tags, dict):
                 raise ValueError("Invalid map tags")
-            tags = {key: value[:240] for key, value in raw_tags.items() if key in TAG_KEYS and isinstance(value, str)}
+            tags = {
+                tag_key: value[:240]
+                for tag_key, value in raw_tags.items()
+                if tag_key in TAG_KEYS and isinstance(value, str)
+            }
             kind = _kind(tags)
             if kind is None:
                 continue
@@ -407,7 +414,7 @@ def _parse_features(elements, areas, forward, reverse, inspected):
             if details is None:
                 continue
             represented_ways.update((member_id, semantic_class) for member_id in member_ids)
-            features.append((original_index, {"id": key, "kind": kind, "name": _feature_name(kind, tags),
+            features.append((original_index, {"id": feature_id, "kind": kind, "name": _feature_name(kind, tags),
                 "source": "OpenStreetMap", "source_url": f"{OSM_URL}/{element_type}/{identifier}",
                 "tags": tags, **details}))
         except (ValueError, TypeError, KeyError, OverflowError, GEOSException):
@@ -423,6 +430,8 @@ def _parse_features(elements, areas, forward, reverse, inspected):
 
 
 def _limit_candidates(features, areas):
+    # Round-robin across feature kinds and search neighborhoods so a dense
+    # downtown block cannot crowd every other area out of the response.
     buckets = defaultdict(deque)
     for index, feature in features:
         nearest = min(range(len(areas)), key=lambda i:
