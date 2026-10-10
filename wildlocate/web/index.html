@@ -153,48 +153,53 @@
             <p id="percentile-copy" class="percentile-copy"></p>
           </section>
 
-          <section id="point-insights" class="insight-section" hidden>
-            <h3>What shapes this score?</h3>
-            <p class="hint">Each comparison changes one condition to its typical value, with score changes shown on a 0–100 scale. These changes do not prove cause and effect.</p>
-            <div id="influence-rows" class="influence-grid"></div>
-          </section>
-          <section id="scenario-panel" class="insight-section" hidden>
-            <div class="scenario-heading"><div><h3>What if the habitat changed?</h3></div>
-              <div><label for="scenario-level">Amount of change</label><select id="scenario-level"><option value="0.1">10%</option><option value="0.25" selected>25%</option><option value="0.5">50%</option></select></div>
-            </div>
-            <p class="hint">Try changing the surrounding land cover while keeping other conditions fixed to see how the score responds. These comparisons suggest ideas to investigate, not forecasts.</p>
-            <div id="scenario-cards" class="scenario-grid" aria-live="polite"></div>
-          </section>
-          <section id="survey-panel" class="insight-section" hidden>
-            <span class="eyebrow">PLACES TO CHECK</span><h3>Where to look first</h3>
-            <p id="survey-copy" class="hint"></p><div id="survey-list" class="survey-list"></div>
-          </section>
-          <section id="evidence-panel" class="evidence-panel" hidden>
-            <h3>About these results</h3><div id="evidence-stats" class="evidence-stats"></div>
-            <p id="evidence-copy" class="hint"></p>
-            <details><summary>Sources and limitations</summary><p id="evidence-sources" class="hint"></p><p class="hint">Wildlife observations reflect where people look and report sightings, so a location without reports is not a confirmed absence. Percentiles compare scores rather than measure confidence.</p></details>
-          </section>
-          <p id="next-step" class="next-step"></p>
-          <p id="result-note" class="hint"></p>
-          <details id="scores">
-            <summary>View all scores</summary>
-            <div class="table-scroll">
-              <table>
-                <caption class="sr-only">Individual habitat assessment results</caption>
-                <thead><tr><th>Location</th><th>Score</th><th>Percentile</th><th>Suitability</th></tr></thead>
-                <tbody id="score-rows"></tbody>
-              </table>
-            </div>
-          </details>
-          <details id="conditions" hidden><summary>Conditions at this location</summary><dl id="feature-values"></dl></details>
-          <p class="disclaimer">Scores compare habitat conditions without telling you whether an animal is present, and area results describe sampled locations rather than every place between them.</p>
           <section id="deep-dive-cta" class="deep-dive-cta">
             <div>
               <h3>Take a closer look</h3>
-              <p id="deep-dive-cta-copy" class="hint">Analyze this area in more detail</p>
+              <p id="deep-dive-cta-copy" class="hint">Investigate roads, buildings, and terrain around this location</p>
             </div>
             <button id="deep-dive-launch" type="button" class="deep-dive-launch">Open Deep Dive <span aria-hidden="true">→</span></button>
           </section>
+          <p class="disclaimer">Suitability is relative to comparison locations, not the probability an animal is currently present. Regional maps show samples, not continuous coverage.</p>
+          <details id="assessment-details" class="assessment-details">
+            <summary>Optional model details and supporting data</summary>
+            <div class="assessment-details-body">
+              <section id="point-insights" class="insight-section" hidden>
+                <h3>What shapes this score?</h3>
+                <p class="hint">Each comparison changes one condition to its typical value, with score changes shown on a 0–100 scale. These changes do not prove cause and effect.</p>
+                <div id="influence-rows" class="influence-grid"></div>
+              </section>
+              <section id="scenario-panel" class="insight-section" hidden>
+                <div class="scenario-heading"><div><h3>What if the habitat changed?</h3></div>
+                  <div><label for="scenario-level">Amount of change</label><select id="scenario-level"><option value="0.1">10%</option><option value="0.25" selected>25%</option><option value="0.5">50%</option></select></div>
+                </div>
+                <p class="hint">Try changing the surrounding land cover while keeping other conditions fixed to see how the score responds. These comparisons suggest ideas to investigate, not forecasts.</p>
+                <div id="scenario-cards" class="scenario-grid" aria-live="polite"></div>
+              </section>
+              <section id="survey-panel" class="insight-section" hidden>
+                <span class="eyebrow">PLACES TO CHECK</span><h3>Where to look first</h3>
+                <p id="survey-copy" class="hint"></p><div id="survey-list" class="survey-list"></div>
+              </section>
+              <section id="evidence-panel" class="evidence-panel" hidden>
+                <h3>About these results</h3><div id="evidence-stats" class="evidence-stats"></div>
+                <p id="evidence-copy" class="hint"></p>
+                <details><summary>Sources and limitations</summary><p id="evidence-sources" class="hint"></p><p class="hint">Wildlife observations reflect where people look and report sightings, so a location without reports is not a confirmed absence. Percentiles compare scores rather than measure confidence.</p></details>
+              </section>
+              <p id="next-step" class="next-step"></p>
+              <p id="result-note" class="hint"></p>
+              <details id="scores">
+                <summary>View all scores</summary>
+                <div class="table-scroll">
+                  <table>
+                    <caption class="sr-only">Individual habitat assessment results</caption>
+                    <thead><tr><th>Location</th><th>Score</th><th>Percentile</th><th>Suitability</th></tr></thead>
+                    <tbody id="score-rows"></tbody>
+                  </table>
+                </div>
+              </details>
+              <details id="conditions" hidden><summary>Conditions at this location</summary><dl id="feature-values"></dl></details>
+            </div>
+          </details>
         </div>
       </div>
     </section>
@@ -206,15 +211,29 @@
 <main id="deep-dive-page" class="deep-dive-page" hidden>
   <section class="deep-dive-hero">
     <button id="deep-dive-back" type="button" class="text-button deep-dive-back">← Back to exploration</button>
-    <span class="eyebrow">A CLOSER LOOK</span>
-    <h1 id="deep-dive-title" tabindex="-1">Deep Dive</h1>
+    <span class="eyebrow">SPECIFIC-PLACE ANALYSIS</span>
+    <h1 id="deep-dive-title" tabindex="-1">Investigate mapped places</h1>
     <p id="deep-dive-meta"></p>
+    <p id="deep-dive-scope-note" class="deep-dive-scope-note"></p>
     <p id="deep-dive-demo-note" class="notice" hidden></p>
   </section>
 
+  <section class="panel deep-dive-map-card deep-dive-location-map">
+    <div class="deep-dive-section-heading">
+      <h2>Roads, buildings and habitat areas</h2>
+      <p class="hint">Zoom or click a P marker to inspect a specific mapped feature. The map opens at your selected location while analysis runs.</p>
+    </div>
+    <div id="deep-dive-map" role="region" aria-label="Map of specific places under investigation"></div>
+    <p id="deep-dive-map-status" class="map-status" role="status" hidden></p>
+    <div class="map-key">
+      <p id="deep-dive-places-map-key" class="hint places-map-key" hidden><span aria-hidden="true" class="place-key-mark">P</span>P markers identify examined places; outlines show mapped roads and building or habitat footprints</p>
+      <p class="hint">Map features may be incomplete. Local model comparisons describe nearby conditions, not proven impacts caused by an individual structure.</p>
+    </div>
+  </section>
+
   <section id="deep-dive-loading" class="panel deep-dive-loading" hidden aria-live="polite">
-    <h2>Analyzing this area…</h2>
-    <p>Checking habitat at sample locations across this area, which may take a few minutes</p>
+    <h2>Identifying and examining real places…</h2>
+    <p>Checking environmental data and mapped features around this location</p>
     <p id="deep-dive-loading-stage" class="status left">Starting analysis…</p>
     <div class="deep-dive-progress" aria-hidden="true"><span></span></div>
     <button id="deep-dive-cancel" type="button" class="secondary compact">Cancel Deep Dive</button>
@@ -223,85 +242,33 @@
   <button id="deep-dive-retry" type="button" class="secondary compact retry-button" hidden>Try Deep Dive again ↗</button>
 
   <div id="deep-dive-content" hidden>
-    <div class="deep-dive-toolbar"><span class="section-caption">Your landscape report</span><div class="result-actions"><button id="deep-dive-print" type="button" class="text-button">Print / save PDF</button><button id="deep-dive-export" type="button" class="text-button">Export JSON ↓</button></div></div>
-    <section class="panel research-card deep-dive-overview-card">
-      <span class="eyebrow">AT A GLANCE</span>
-      <h2>The area around you</h2>
-      <p id="deep-dive-summary" class="landscape-summary"></p>
-      <div id="deep-dive-overview" class="research-metrics"></div>
-      <p id="deep-dive-overview-copy" class="research-copy"></p>
-      <p id="deep-dive-coverage-note" class="coverage-note"></p>
-    </section>
-
-    <section class="deep-dive-field-grid" aria-label="Habitat map and survey shortlist">
-      <div class="panel deep-dive-map-card">
-        <div class="deep-dive-section-heading"><h2>Habitat samples</h2><p class="hint">Scroll or pinch to zoom, then select a sample for details</p></div>
-        <div id="deep-dive-map" role="region" aria-label="Deep Dive habitat map"></div>
-        <p id="deep-dive-map-status" class="map-status" role="status" hidden></p>
-        <div class="map-key">
-          <div class="legend" aria-label="Suitability categories"><span><i class="very-low"></i>Very low</span><span><i class="low"></i>Low</span><span><i class="moderate"></i>Moderate</span><span><i class="high"></i>High</span><span><i class="very-high"></i>Very high</span><span><i class="unavailable"></i>No data</span></div>
-          <p class="hint">Dots show sampled locations, with numbers marking the places listed alongside the map</p>
-          <p id="deep-dive-places-map-key" class="hint places-map-key" hidden><span aria-hidden="true" class="place-key-mark">P</span>P labels mark places to investigate below; lines and outlines show mapped roads and footprints</p>
-        </div>
-      </div>
-      <aside class="panel research-card field-shortlist">
-        <span class="eyebrow">PLACES TO CHECK</span>
-        <h2>Where to look first</h2>
-        <p class="research-copy">Start with the highest-scoring samples and check access and habitat on the ground before planning a visit</p>
-        <div id="deep-dive-survey-list" class="survey-list"></div>
-      </aside>
-    </section>
-
+    <div class="deep-dive-toolbar">
+      <span class="section-caption">Specific-place findings</span>
+      <div class="result-actions"><button id="deep-dive-print" type="button" class="text-button">Print / save PDF</button><button id="deep-dive-export" type="button" class="text-button">Export JSON ↓</button></div>
+    </div>
     <section id="deep-dive-places" class="panel research-card places-panel" aria-labelledby="deep-dive-places-heading">
-      <div class="places-heading"><div><span class="eyebrow">SPECIFIC LOCATIONS</span><h2 id="deep-dive-places-heading">Places to investigate</h2></div><span id="deep-dive-places-status" class="place-status"></span></div>
+      <div class="places-heading">
+        <div><span class="eyebrow">LOCAL FEATURES</span><h2 id="deep-dive-places-heading">Specific places to investigate</h2></div>
+        <span id="deep-dive-places-status" class="place-status"></span>
+      </div>
+      <p id="deep-dive-summary" class="landscape-summary"></p>
       <p id="deep-dive-places-summary" class="research-copy"></p>
+      <p id="deep-dive-coverage-note" class="coverage-note"></p>
       <p id="deep-dive-places-coverage" class="places-coverage"></p>
       <div id="deep-dive-places-list" class="places-list"></div>
-      <details class="places-method"><summary>How these places were chosen</summary><div id="deep-dive-places-evidence" class="research-copy"></div></details>
+      <details class="places-method"><summary>Sources, methodology and limitations</summary><div id="deep-dive-places-evidence" class="research-copy"></div></details>
     </section>
-
-    <section class="deep-dive-analysis-grid" aria-label="Landscape comparison">
-      <article class="panel research-card">
-        <h2>How the samples compare</h2>
-        <div id="deep-dive-distribution" class="distribution-list"></div>
-      </article>
-      <article class="panel research-card">
-        <h2>Which direction looks strongest?</h2>
-        <div id="deep-dive-sectors" class="sector-list"></div>
-      </article>
-    </section>
-
-    <section class="deep-dive-analysis-grid" aria-label="Conditions shaping habitat">
-      <article class="panel research-card">
-        <h2>Supporting conditions</h2>
-        <div id="deep-dive-strengths" class="research-list"></div>
-      </article>
-      <article class="panel research-card">
-        <h2>Limiting conditions</h2>
-        <div id="deep-dive-constraints" class="research-list"></div>
-      </article>
-      <p id="deep-dive-insight-note" class="insight-note"></p>
-    </section>
-
-    <section class="panel research-card">
-      <h2>What to check in the field</h2>
-      <p class="research-copy">Conditions the model links to lower scores in this area</p>
-      <div id="deep-dive-pressures" class="pressure-grid"></div>
-    </section>
-
     <section class="panel research-card deep-dive-evidence-card">
-      <h2>About these results</h2>
-      <div id="deep-dive-evidence-stats" class="evidence-stats"></div>
-      <p id="deep-dive-evidence-copy" class="research-copy"></p>
       <details>
-        <summary>Sources and limitations</summary>
+        <summary>Model validation and data sources</summary>
+        <div id="deep-dive-evidence-stats" class="evidence-stats"></div>
+        <p id="deep-dive-evidence-copy" class="research-copy"></p>
         <p id="deep-dive-evidence-sources" class="research-copy"></p>
-        <p class="research-copy">Scores compare habitat conditions rather than the probability that an animal is present, and samples do not describe every place between them. Wildlife observations reflect where people look and report sightings, so a location without reports is not a confirmed absence.</p>
+        <p class="research-copy">Suitability percentiles rank model comparison locations, not the probability that a species is present. Environmental associations cannot demonstrate causal effects of any named road or building.</p>
       </details>
     </section>
   </div>
-
-  <footer><span>Wild-Locate</span><span>For community conservation</span></footer>
+  <footer><span>Wild-Locate</span><span>Local habitat intelligence</span></footer>
 </main>
 
 <main id="species-page" class="species-page" hidden>

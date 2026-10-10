@@ -62,6 +62,29 @@ function setReport(b,value) {
   b.run('renderDeepDive(report)');
 }
 
+test('Deep Dive map initializes and previews at a non-Amherst location',async()=>{
+  const b=await browser();
+  const centers=[], circles=[], fitted=[];
+  const view={setView(center){centers.push(center);return this;},invalidateSize(){return this;},
+    fitBounds(bounds){fitted.push(bounds);return this;}};
+  const layer={addTo(){return this;},clearLayers(){return this;}};
+  b.context.L={
+    map:()=>view,layerGroup:()=>layer,
+    tileLayer:()=>({on(){return this;},addTo(){return this;}}),
+    circle:(center,opts)=>{circles.push({center,opts});return {
+      addTo(){return this;},getBounds(){return {center};},
+    };},
+  };
+  b.context.window.L=b.context.L;
+  b.context.target={latitude:28.1,longitude:-81.6,radius_km:25};
+  b.run('result=target;initDeepDiveMap();previewDeepDiveArea(target)');
+  assert.equal(centers[0][0],28.1);
+  assert.equal(centers[0][1],-81.6);
+  assert.equal(circles[0].opts.radius,25000);
+  assert.equal(fitted.length,1);
+  assert.equal(b.get('deep-dive-places-map-key').hidden,true);
+});
+
 test('Specific place cards expose location, model comparison, measurements and field checks',async()=>{
   const b=await browser();
   setReport(b,{places});
@@ -78,6 +101,22 @@ test('Specific place cards expose location, model comparison, measurements and f
   const links=descendants(b.get('deep-dive-places-list'),'A');
   assert.equal(links[0].href,'https://www.openstreetmap.org/way/123');
   assert.match(links[0].rel,/noopener/);
+});
+
+test('Mapped neutral, supporting and unscored places remain visible',async()=>{
+  const b=await browser();
+  const locations=[
+    {...road,id:'supporting',signals:[],supporting_signals:[{feature:'distance_to_road_m',current:340,reference:60,effect:.04}],assessment_status:'available'},
+    {...road,id:'neutral',signals:[],supporting_signals:[],assessment_status:'available'},
+    {...road,id:'unscored',signals:[],supporting_signals:[],assessment_status:'unavailable',
+      assessment_note:'Raster data unavailable for this location'},
+  ];
+  setReport(b,{places:{...places,sites:locations}});
+  const cards=b.get('deep-dive-places-list').children;
+  assert.equal(cards.length,3);
+  assert.match(textOf(cards[0]),/supporting local condition/i);
+  assert.match(textOf(cards[1]),/no substantial model limitation/i);
+  assert.match(textOf(cards[2]),/assessment unavailable|Raster data unavailable/i);
 });
 
 test('External names stay plain text and unsafe source URLs never become links',async()=>{
@@ -102,7 +141,7 @@ test('Older reports and unavailable mapping do not imply that damaging features 
   const b=await browser();
   setReport(b,{});
   assert.equal(b.get('deep-dive-places-list').children.length,0);
-  assert.match(b.get('deep-dive-places-summary').textContent,/saved report|not included/i);
+  assert.match(b.get('deep-dive-places-summary').textContent,/no specific-place analysis|saved report|not included/i);
   setReport(b,{places:{...places,status:'unavailable',sites:[],mapped_features:0,assessed_features:0}});
   assert.match(b.get('deep-dive-places-summary').textContent,/unavailable|could not/i);
   assert.doesNotMatch(b.get('deep-dive-places-summary').textContent,/no roads|no buildings|no damage/i);
@@ -130,7 +169,7 @@ test('Malformed places are skipped without breaking the landscape report',async(
   setReport(b,{places:{...places,sites:[{...road,latitude:Infinity},{...road,latitude:42.37,longitude:400},{...road,id:'valid'}]}});
   assert.equal(b.get('deep-dive-places-list').children.length,1);
   setReport(b,{places:{...places,status:'no_signal',sites:[]}});
-  assert.match(b.get('deep-dive-places-summary').textContent,/no.*limiting|no.*negative/i);
+  assert.match(b.get('deep-dive-places-summary').textContent,/no.*mapped|no.*supported|incomplete/i);
   assert.doesNotMatch(b.get('deep-dive-places-summary').textContent,/no damage|safe/i);
 });
 

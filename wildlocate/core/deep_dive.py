@@ -249,32 +249,28 @@ def analyze_deep_dive(species, latitude, longitude, radius_km, region="MA", *, u
     )
 
     for point in points:
+        # Points near state boundaries or outside installed raster coverage should
+        # not abort an otherwise valid Deep Dive. They are explicitly unscored.
         try:
             extracted = extractor(point["latitude"], point["longitude"])
             frame = build_prediction_frame(extracted, predictors)
             if not np.isfinite(frame.to_numpy(dtype=float)).all():
                 raise ValueError("Environmental feature extraction returned missing values")
-        except ValueError as exc:
-            if not str(exc).startswith((
-                "Requested coordinate cannot be evaluated",
-                "Environmental feature extraction returned missing values",
-            )):
-                raise
-            point.update(
-                status="unavailable",
-                reason="Outside model coverage or incomplete environmental data.",
+            score = float(model.predict_proba(frame)[0, 1])
+            if not math.isfinite(score):
+                raise ValueError("Prediction returned a non-finite suitability score")
+        except Exception as exc:
+            logger.warning(
+                "Deep Dive sample unavailable at %.5f, %.5f: %s",
+                point["latitude"], point["longitude"], exc,
             )
+            point.update(status="unavailable",
+                         reason="Outside model coverage or environmental data unavailable.")
             continue
-
-        score = float(model.predict_proba(frame)[0, 1])
-        if not math.isfinite(score):
-            raise RuntimeError("Prediction returned a non-finite suitability score.")
 
         percentile = percentile_of_score(score, comparison_scores)
         point.update(
-            status="ok",
-            score=score,
-            percentile=percentile,
+            status="ok", score=score, percentile=percentile,
             category=category_for_percentile(percentile),
         )
         try:
@@ -283,7 +279,7 @@ def analyze_deep_dive(species, latitude, longitude, radius_km, region="MA", *, u
             ).get("influences", [])
             point["insight_status"] = "available"
         except Exception:
-            logger.exception("Deep Dive model explanation unavailable for an evaluated sample")
+            logger.exception("Deep Dive explanation unavailable for a scored sample")
             point["influences"] = []
             point["insight_status"] = "unavailable"
 

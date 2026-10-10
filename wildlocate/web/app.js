@@ -458,6 +458,8 @@ function showResult(data) {
   $('empty').hidden = true;
   $('result').hidden = false;
   $('result-kind').textContent = area ? 'SURROUNDING AREA' : 'YOUR LOCATION';
+  // New assessments always start with the concise result, not expanded details.
+  $('assessment-details').open = false;
   $('result-title').textContent = area
     ? `${data.species} · ${data.radius_km} km radius`
     : data.species;
@@ -471,7 +473,6 @@ function showResult(data) {
     const scored = (data.points || []).filter(p => p.status === 'ok' && Number.isFinite(p.percentile));
     metric(scored.length ? ordinal(scored.reduce((sum, p) => sum + p.percentile, 0) / scored.length) : '—', 'Mean relative percentile');
     metric(String(data.evaluated_points), 'Points scored');
-    metric(`${data.grid_spacing_km} km`, 'Grid spacing');
     if (data.unavailable_points) metric(String(data.unavailable_points), 'Unavailable');
     $('point-percentile').hidden = true;
   } else {
@@ -525,9 +526,9 @@ function showResult(data) {
   }
 
   $('deep-dive-cta-copy').textContent = area
-    ? `See habitat patterns and places to check within this ${data.radius_km} km area`
-    : 'See habitat patterns and places to check around this location';
-  if (data.recorded_at) $('deep-dive-cta-copy').textContent += ' with a fresh analysis using your local data';
+    ? `Investigate specific buildings, roads, and terrain in this ${data.radius_km} km region.`
+    : 'Your score is for one point. Deep Dive investigates buildings, roads, and terrain in the surrounding 10 km radius—not just this point.';
+  if (data.recorded_at) $('deep-dive-cta-copy').textContent += ' This runs a fresh analysis with your local data.';
   $('status').textContent = area
     ? 'Assessment complete — select a map point for details'
     : 'Assessment complete';
@@ -750,8 +751,11 @@ function initDeepDiveMap() {
     }
     return;
   }
+  const target = deepDiveResult || result;
+  const latitude = Number(target?.latitude);
+  const longitude = Number(target?.longitude);
   deepDiveMap = L.map('deep-dive-map', {scrollWheelZoom: true, touchZoom: true, wheelPxPerZoomLevel: 80, zoomSnap: .25, minZoom: 3, maxZoom: 18})
-    .setView([42.37, -72.28], 9);
+    .setView(Number.isFinite(latitude) && Number.isFinite(longitude) ? [latitude, longitude] : [39, -96], 9);
   deepDiveOverlay = L.layerGroup().addTo(deepDiveMap);
   const tiles = L.tileLayer(
     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -764,12 +768,33 @@ function initDeepDiveMap() {
   );
   tiles.on('tileerror', () => {
     $('deep-dive-map-status').hidden = false;
-    $('deep-dive-map-status').textContent = 'Map tiles are temporarily unavailable — the report is still available below';
+    $('deep-dive-map-status').textContent = 'Map imagery could not load. Mapped feature overlays and the place findings can still be inspected; check your internet connection';
   });
   tiles.on('load', () => {
     $('deep-dive-map-status').hidden = true;
   });
   tiles.addTo(deepDiveMap);
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => deepDiveMap?.invalidateSize({pan: false})).observe($('deep-dive-map'));
+  }
+}
+
+function previewDeepDiveArea(request) {
+  initDeepDiveMap();
+  if (!deepDiveMap || !deepDiveOverlay) return;
+  deepDiveOverlay.clearLayers();
+  deepDiveSampleMarkers.clear();
+  deepDivePlaceLayers.clear();
+  $('deep-dive-places-map-key').hidden = true;
+  const center = [Number(request.latitude), Number(request.longitude)];
+  if (!center.every(Number.isFinite)) return;
+  deepDiveBounds = L.circle(center, {
+    radius: Math.max(1, Number(request.radius_km) || 10) * 1000,
+    color: '#315b48', weight: 1.4, fillOpacity: .015,
+    interactive: false,
+  }).addTo(deepDiveOverlay).getBounds();
+  deepDiveMap.invalidateSize({pan: false});
+  deepDiveMap.fitBounds(deepDiveBounds, {padding: [26, 26], animate: false});
 }
 
 function drawDeepDiveMap(report) {
@@ -788,39 +813,26 @@ function drawDeepDiveMap(report) {
   }).addTo(deepDiveOverlay);
   deepDiveBounds = circle.getBounds();
 
-  for (const point of report.points || []) {
-    const ok = point.status === 'ok';
-    const percentile = Number(point.percentile);
-    const color = ok && Number.isFinite(percentile)
-      ? colors[Math.min(4, Math.max(0, Math.floor(percentile / 20)))]
-      : '#858585';
-    const popup = document.createElement('div');
-    popup.textContent = ok
-      ? `${coords(point.latitude, point.longitude)} — ${point.category}, ${point.percentile}th percentile`
-      : `${coords(point.latitude, point.longitude)} — unavailable`;
-    const marker = L.circleMarker([point.latitude, point.longitude], {
-      radius: 4.5,
-      color,
-      weight: .8,
-      fillColor: color,
-      fillOpacity: .88,
-      bubblingMouseEvents: false,
-    }).bindPopup(popup).addTo(deepDiveOverlay);
-    deepDiveSampleMarkers.set(`${point.latitude},${point.longitude}`, marker);
-  }
-  for (const point of report.survey_priorities || []) {
-    const marker = L.marker([point.latitude, point.longitude], {
-      icon: L.divIcon({className: 'survey-rank-marker', html: String(point.rank), iconSize: [28, 28], iconAnchor: [14, 14]}),
-      title: `Sample ${point.rank}: ${ordinal(point.percentile)} percentile`,
-    }).addTo(deepDiveOverlay);
-    const popup = document.createElement('div');
-    popup.textContent = `Sample ${point.rank} · ${ordinal(point.percentile)} percentile · ${coords(point.latitude, point.longitude)}`;
-    marker.bindPopup(popup);
-    deepDiveSampleMarkers.set(`${point.latitude},${point.longitude}`, marker);
-  }
+  // Place-focused view: do not hide named features under 81 sample markers.
   drawDeepDivePlaces(report);
+  // Leaflet must measure the *visible* element before computing the viewport.
+  deepDiveMap.invalidateSize({pan: false});
   deepDiveMap.fitBounds(deepDiveBounds, {padding: [26, 26], animate: false});
-  setTimeout(() => deepDiveMap && deepDiveMap.invalidateSize({pan: false}), 0);
+  setTimeout(() => {
+    if (!deepDiveMap || $('deep-dive-page').hidden) return;
+    deepDiveMap.invalidateSize({pan: false});
+    deepDiveMap.fitBounds(deepDiveBounds, {padding: [26, 26], animate: false});
+  }, 0);
+}
+
+function deepDiveScopeText(source, radius) {
+  if (source?.analysis_type === 'regional') {
+    return `Regional analysis · Deep Dive examines specific places within your original ${radius} km radius.`;
+  }
+  if (source) {
+    return `Started from one point · Deep Dive examines the surrounding ${radius} km radius, not just that coordinate. Locations in the region are sampled and mapped features are investigated individually.`;
+  }
+  return `Deep Dive examines a ${radius} km radius around the selected coordinate rather than a single point.`;
 }
 
 function renderDeepDive(report) {
@@ -831,100 +843,24 @@ function renderDeepDive(report) {
   $('deep-dive-export').disabled = false;
   $('deep-dive-print').disabled = false;
   $('deep-dive-content').hidden = false;
-  $('deep-dive-title').textContent = `${report.species} habitat`;
+  $('deep-dive-title').textContent = `${report.species} · specific places`;
   $('deep-dive-meta').textContent = `${report.radius_km} km radius · ${report.model} · ${coords(report.latitude, report.longitude)}`;
+  $('deep-dive-scope-note').textContent = deepDiveScopeText(deepDiveSource, report.radius_km);
 
   const overview = report.overview || {};
   const evaluated = overview.evaluated_points ?? 0;
   const total = overview.total_points ?? report.sample_points ?? evaluated;
-  const unavailable = overview.unavailable_points ?? report.unavailable_points ?? total - evaluated;
-  const coverage = total ? 100 * evaluated / total : 0;
-  const highShare = evaluated ? 100 * (overview.high_suitability_points || 0) / evaluated : 0;
-  const metrics = $('deep-dive-overview');
-  metrics.replaceChildren();
-  researchMetric(metrics, `${evaluated}/${total}`, 'Samples evaluated');
-  researchMetric(
-    metrics,
-    Number.isFinite(overview.median_percentile) ? ordinal(overview.median_percentile)
-      : Number.isFinite(overview.mean_percentile) ? ordinal(overview.mean_percentile) : '—',
-    Number.isFinite(overview.median_percentile) ? 'Median habitat percentile' : 'Mean habitat percentile'
-  );
-  researchMetric(metrics, evaluated ? `${Math.round(highShare)}%` : '—', 'High or very high samples');
-  researchMetric(metrics, `${Math.round(coverage)}%`, 'Sample coverage');
-
+  const mapped = report.places?.mapped_features ?? 0;
+  const terrain = report.places?.terrain_samples ?? 0;
+  $('deep-dive-summary').textContent = mapped || terrain
+    ? `Investigate ${mapped} mapped features and ${terrain} terrain samples around your location. Select a place below to examine the model evidence and local environmental context.`
+    : 'Mapped structures and usable terrain samples could not be confirmed here. This does not mean roads, buildings or habitat features are absent.';
   $('deep-dive-coverage-note').textContent =
-    `${evaluated} of ${total} sample locations evaluated · ${unavailable} unavailable · ` +
-    `Samples are approximately ${report.grid_spacing_km ?? report.radius_km / 5} km apart and do not represent continuous habitat coverage`;
+    `${evaluated} of ${total} habitat samples had usable environmental data. ` +
+    'Mapped features are searched only within selected neighborhoods; neither the map nor the models provide complete coverage of the study area.';
 
-  const strongest = overview.strongest_point;
-  const sector = overview.strongest_sector;
-  $('deep-dive-summary').textContent = !evaluated
-    ? 'No locations could be evaluated — try a smaller radius or another location, and check that the environmental datasets are available'
-    : `${overview.high_suitability_points || 0} of ${evaluated} samples have high or very high relative suitability for ${report.species}, ` +
-      (sector ? `and ${sector.name} has the highest average rank among directions with at least three samples.`
-        : 'with the map and shortlist showing where to take a closer look.');
-  $('deep-dive-overview-copy').textContent = strongest
-    ? `Strongest sample: ${ordinal(strongest.percentile)} percentile` +
-      (Number.isFinite(overview.min_percentile) && Number.isFinite(overview.max_percentile)
-        ? ` · Sample range: ${ordinal(overview.min_percentile)}–${ordinal(overview.max_percentile)} percentile` : '')
-    : 'A missing sample is a data gap, not a low-suitability result';
-
-  renderDeepDiveDistribution(report);
-  renderDeepDiveSurvey(report);
-  renderDeepDiveEvidence(report);
   renderDeepDivePlaces(report);
-
-  const habitat = report.habitat || {};
-  const explanationUnavailable = habitat.status === 'unavailable';
-  const explained = habitat.explanation_points ?? evaluated;
-  const failed = habitat.failed_explanations ?? 0;
-  $('deep-dive-insight-note').textContent = !evaluated
-    ? 'No samples could be scored, so supporting and limiting conditions could not be evaluated'
-    : explanationUnavailable
-    ? `Scores are available for ${evaluated} samples, but their explanations could not be calculated`
-    : `${explained} of ${evaluated} evaluated samples have usable model explanations` +
-      (failed ? `; ${failed} explanations failed, so signals below describe only the explained samples` : '') +
-      '. Each comparison replaces one condition with its typical value, but effects overlap and do not prove cause and effect.';
-
-  const strengths = $('deep-dive-strengths');
-  strengths.replaceChildren();
-  for (const row of habitat.strengths || []) renderDeepDiveSignal(strengths, row);
-  if (!strengths.children.length) researchRow(strengths,
-    explanationUnavailable ? 'Explanations unavailable' : 'No positive average signal',
-    !evaluated ? 'No samples could be scored — try another location or check the habitat data'
-      : explanationUnavailable ? 'The model scores were calculated, but their explanations could not be evaluated'
-      : 'No condition had a meaningful positive average effect among the explained samples');
-
-  const constraints = $('deep-dive-constraints');
-  constraints.replaceChildren();
-  for (const row of habitat.constraints || []) renderDeepDiveSignal(constraints, row);
-  if (!constraints.children.length) researchRow(constraints,
-    explanationUnavailable ? 'Explanations unavailable' : 'No negative average signal',
-    explanationUnavailable ? 'No conclusion about limiting conditions can be drawn from missing explanations'
-      : 'No condition had a meaningful negative average effect among the explained samples');
-
-  const pressures = $('deep-dive-pressures');
-  pressures.replaceChildren();
-  for (const pressure of report.pressures || []) {
-    const card = document.createElement('div');
-    card.className = 'pressure-card';
-    const strong = document.createElement('strong');
-    strong.textContent = pressure.domain;
-    const detail = document.createElement('span');
-    detail.textContent =
-      `Linked to lower scores at ${pressure.affected_points} of ${pressure.points_evaluated ?? explained} explained samples (${Math.round(pressure.affected_percentage)}%) · ` +
-      `${(pressure.features || []).map(friendlyFeature).join(', ')}`;
-    card.append(strong, detail);
-    pressures.append(card);
-  }
-  if (!pressures.children.length) {
-    const card = document.createElement('div');
-    card.className = 'pressure-card';
-    card.textContent = explanationUnavailable ? 'These conditions could not be evaluated'
-      : 'No conditions consistently lowered scores among the explained samples';
-    pressures.append(card);
-  }
-
+  renderDeepDiveEvidence(report);
   drawDeepDiveMap(report);
 }
 
@@ -961,21 +897,21 @@ function renderDeepDivePlaces(report) {
   const sites = Array.isArray(places?.sites) ? places.sites.filter(validPlaceLocation).slice(0, 9) : [];
   const status = places?.status;
   $('deep-dive-places-status').textContent = !places ? 'Earlier report'
-    : ({available: 'Mapped places', partial: 'Partial analysis', unavailable: 'Mapping unavailable', no_signal: 'No limiting comparison'})[status] || 'Mapping incomplete';
+    : ({available: 'Mapped places', partial: 'Partial analysis', unavailable: 'Mapping unavailable', no_signal: 'No mapped locations'})[status] || 'Mapping incomplete';
   $('deep-dive-places-summary').textContent = !places
-    ? 'Specific places were not included in this saved report — run a new Deep Dive to investigate roads, buildings and terrain'
+    ? 'This report contains no specific-place analysis — run a new Deep Dive to investigate individual mapped roads, buildings, and habitat areas'
     : status === 'unavailable' && !sites.length
     ? 'Mapped places could not be evaluated, so no conclusion can be drawn about individual roads or buildings'
     : status === 'no_signal' && !sites.length
-    ? 'No relevant negative model comparison stood out among the evaluated places; this does not establish that these places are free of habitat pressures'
+    ? 'No supported mapped features were retrieved in the inspected neighborhoods. Incomplete coverage cannot establish their absence'
     : places.summary || 'Named places with surrounding conditions worth checking in the field';
   const areas = Array.isArray(places?.searched_areas) ? places.searched_areas.filter(validPlaceLocation) : [];
   const radii = [...new Set(areas.filter(area => Number.isFinite(area.radius_m)).map(area => area.radius_m / 1000))];
   const size = radii.length === 1 ? `${radii[0]} km radius ` : '';
   $('deep-dive-places-coverage').textContent = places
-    ? `${areas.length} selected ${size}neighborhood${areas.length === 1 ? '' : 's'} for search · ${places.mapped_features ?? 0} mapped features · ${places.assessed_features ?? 0} evaluated` +
+    ? `${areas.length} selected ${size}neighborhood${areas.length === 1 ? '' : 's'} for search · ${places.mapped_features ?? 0} mapped features · ${places.terrain_samples ?? 0} terrain samples · ${places.assessed_features ?? 0} evaluated` +
       (places.failed_evaluations ? ` · ${places.failed_evaluations} evaluations failed` : '') +
-      ' · Coverage is limited to these neighborhoods, rather than the full study area'
+      ' · This is a partial map search, not an inventory of all places in the area'
     : '';
   $('deep-dive-places-map-key').hidden = !sites.length;
   sites.forEach((site, index) => {
@@ -1002,15 +938,25 @@ function renderDeepDivePlaces(report) {
     const signals = (Array.isArray(site.signals) ? site.signals : []).filter(signal =>
       signal && typeof signal.feature === 'string' && Number.isFinite(signal.effect) && signal.effect < 0 &&
       Number.isFinite(signal.current) && Number.isFinite(signal.reference));
+    const supporting = (Array.isArray(site.supporting_signals) ? site.supporting_signals : []).filter(signal =>
+      signal && typeof signal.feature === 'string' && Number.isFinite(signal.effect) && signal.effect > 0 &&
+      Number.isFinite(signal.current) && Number.isFinite(signal.reference));
     const strongest = [...signals].sort((a, b) => a.effect - b.effect)[0];
+    const positive = [...supporting].sort((a, b) => b.effect - a.effect)[0];
     const comparison = document.createElement('p');
     comparison.className = 'place-comparison';
     comparison.textContent = strongest
-      ? `−${(-strongest.effect * 100).toFixed(1)} score points · strongest condition comparison`
-      : 'Condition comparisons unavailable';
+      ? `−${(-strongest.effect * 100).toFixed(1)} model-score points · limiting local condition`
+      : positive
+      ? `+${(positive.effect * 100).toFixed(1)} model-score points · supporting local condition`
+      : site.assessment_status === 'unavailable'
+      ? `${site.terrain_sample ? 'Terrain sample' : 'Mapped feature'} · local model assessment unavailable`
+      : `${site.terrain_sample ? 'Terrain sample' : 'Mapped feature'} · no substantial model limitation identified`;
     const caption = document.createElement('p');
     caption.className = 'place-caption';
-    caption.textContent = strongest ? friendlyFeature(strongest.feature) : 'The score describes conditions around this location';
+    caption.textContent = strongest ? friendlyFeature(strongest.feature)
+      : positive ? friendlyFeature(positive.feature)
+      : (site.assessment_note || 'No measured model effect can be attributed to this individual feature');
     if (Number.isFinite(site.percentile)) caption.textContent += ` · ${ordinal(site.percentile)} habitat percentile`;
     const details = document.createElement('details');
     details.className = 'place-evidence';
@@ -1022,10 +968,17 @@ function renderDeepDivePlaces(report) {
     if (Number.isFinite(site.length_m)) researchRow(body, `Mapped road length${sizeScope}`, `${Math.round(site.length_m).toLocaleString()} m`);
     if (Number.isFinite(site.area_m2)) researchRow(body, `Mapped footprint${sizeScope}`, `${Math.round(site.area_m2).toLocaleString()} m²`);
     for (const signal of signals) researchRow(body, friendlyFeature(signal.feature),
-      `Here: ${featureValue(signal.feature, signal.current)} · typical: ${featureValue(signal.feature, signal.reference)} · comparison: −${(-signal.effect * 100).toFixed(1)} score points`);
+      `Here: ${featureValue(signal.feature, signal.current)} · typical: ${featureValue(signal.feature, signal.reference)} · limiting model comparison: −${(-signal.effect * 100).toFixed(1)} score points`);
+    for (const signal of supporting) researchRow(body, friendlyFeature(signal.feature),
+      `Here: ${featureValue(signal.feature, signal.current)} · typical: ${featureValue(signal.feature, signal.reference)} · supporting model comparison: +${(signal.effect * 100).toFixed(1)} score points`);
+    if (typeof site.assessment_note === 'string') researchRow(body, 'Interpretation', site.assessment_note);
     if (site.nearby_habitat && Number.isFinite(site.nearby_habitat.distance_m) && Number.isFinite(site.nearby_habitat.percentile)) {
       researchRow(body, 'Nearby habitat sample', `${ordinal(site.nearby_habitat.percentile)} percentile · ${Math.round(site.nearby_habitat.distance_m).toLocaleString()} m away, without confirming habitat between the locations`);
     }
+    const pathways = (Array.isArray(site.potential_pathways) ? site.potential_pathways : [])
+      .filter(value => typeof value === 'string');
+    if (pathways.length) researchRow(body, 'Possible environmental interactions to verify (not measured)',
+      pathways.join(' · '));
     const checks = document.createElement('ul');
     checks.className = 'place-checks';
     for (const check of Array.isArray(site.field_checks) ? site.field_checks : []) {
@@ -1054,7 +1007,7 @@ function renderDeepDivePlaces(report) {
     evidence.append(p);
   }
   const note = document.createElement('p');
-  note.textContent = 'Places are ranked by their strongest relevant negative model comparison, rather than a sum of effects or proof that a structure caused damage. Missing mapping does not mean roads, buildings or pressures are absent.';
+  note.textContent = 'Rankings prioritize the strongest limiting nearby model association; other mapped places are retained even with neutral or missing model results. These comparisons cannot prove that a named road or building caused environmental harm.';
   evidence.append(note);
   const sources = document.createElement('div');
   sources.className = 'place-sources';
@@ -1124,89 +1077,6 @@ function focusDeepDivePlace(site) {
   else deepDiveMap.setView([site.latitude, site.longitude], 16, {animate: false});
   layers?.marker?.openPopup();
   $('deep-dive-map').scrollIntoView({behavior: scrollBehavior(), block: 'center'});
-}
-
-function renderDeepDiveSignal(parent, row) {
-  const effect = row.mean_effect;
-  const comparison = Number.isFinite(row.mean_current) && Number.isFinite(row.mean_reference)
-    ? ` · Sample average: ${featureValue(row.feature, row.mean_current)} · typical: ${featureValue(row.feature, row.mean_reference)}` : '';
-  researchRow(parent, friendlyFeature(row.feature),
-    `${effect > 0 ? 'Supports' : 'Limits'} the score at ${row.affected_points} of ${row.points_evaluated} explained samples${comparison} · ` +
-    `Average effect: ${effect > 0 ? '+' : ''}${(effect * 100).toFixed(1)} score points on a 0–100 scale`);
-}
-
-function renderDeepDiveDistribution(report) {
-  const distribution = $('deep-dive-distribution');
-  distribution.replaceChildren();
-  for (const item of report.distribution || []) {
-    const row = document.createElement('div');
-    row.className = 'distribution-row';
-    const heading = document.createElement('div');
-    const title = document.createElement('strong');
-    title.textContent = item.category;
-    const caption = document.createElement('span');
-    caption.textContent = `${item.count} samples · ${Math.round(item.percentage)}%`;
-    heading.append(title, caption);
-    const track = document.createElement('div');
-    track.className = 'distribution-track';
-    const bar = document.createElement('span');
-    bar.className = 'distribution-bar';
-    bar.style.width = `${Math.max(0, Math.min(100, item.percentage))}%`;
-    const index = ['very low', 'low', 'moderate', 'high', 'very high'].indexOf(item.category.toLowerCase());
-    bar.style.background = colors[index] || '#858585';
-    track.append(bar);
-    row.append(heading, track);
-    distribution.append(row);
-  }
-  if (!distribution.children.length) researchRow(distribution, 'Distribution unavailable',
-    report.overview?.evaluated_points ? 'This saved report does not include the sample distribution' : 'There are no evaluated samples to compare');
-
-  const sectors = $('deep-dive-sectors');
-  sectors.replaceChildren();
-  for (const item of report.sectors || []) {
-    const row = document.createElement('div');
-    row.className = 'sector-row';
-    const heading = document.createElement('div');
-    const title = document.createElement('strong');
-    title.textContent = item.name;
-    const caption = document.createElement('span');
-    caption.textContent = `${ordinal(item.mean_percentile)} mean percentile · ${item.points} samples`;
-    heading.append(title, caption);
-    const track = document.createElement('div');
-    track.className = 'sector-track';
-    const bar = document.createElement('span');
-    bar.className = 'sector-bar';
-    bar.style.width = `${Math.max(0, Math.min(100, item.mean_percentile))}%`;
-    track.append(bar);
-    row.append(heading, track);
-    sectors.append(row);
-  }
-  if (!sectors.children.length) researchRow(sectors, 'Directional comparison unavailable', 'Usable samples in each direction are needed to compare the landscape');
-}
-
-function renderDeepDiveSurvey(report) {
-  const parent = $('deep-dive-survey-list');
-  parent.replaceChildren();
-  for (const point of report.survey_priorities || []) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'survey-sample';
-    const title = document.createElement('strong');
-    title.textContent = `${point.rank}. ${ordinal(point.percentile)} percentile · ${point.category}`;
-    const detail = document.createElement('span');
-    detail.textContent = `${point.sector} · ${point.distance_km.toFixed(1)} km from center`;
-    const location = document.createElement('span');
-    location.textContent = `${coords(point.latitude, point.longitude)} · Locate on map ↗`;
-    button.append(title, detail, location);
-    button.addEventListener('click', () => {
-      if (!deepDiveMap) return;
-      deepDiveMap.setView([point.latitude, point.longitude], 13);
-      deepDiveSampleMarkers.get(`${point.latitude},${point.longitude}`)?.openPopup();
-      $('deep-dive-map').scrollIntoView({behavior: scrollBehavior(), block: 'center'});
-    });
-    parent.append(button);
-  }
-  if (!parent.children.length) researchRow(parent, 'No field shortlist available', 'Usable ranked samples are needed to identify locations to investigate');
 }
 
 function renderDeepDiveEvidence(report) {
@@ -1308,15 +1178,20 @@ async function startDeepDive() {
   $('deep-dive-content').hidden = true;
   $('deep-dive-error').hidden = true;
   $('deep-dive-retry').hidden = true;
-  $('deep-dive-title').textContent = `${result.species} habitat`;
+  $('deep-dive-title').textContent = `${result.species} · specific places`;
   $('deep-dive-meta').textContent =
-    `${radius} km · ${result.analysis_type === 'regional' ? 'regional' : 'point'} analysis`;
+    `${radius} km region · ${result.analysis_type === 'regional' ? 'area' : 'point'} origin`;
+  $('deep-dive-scope-note').textContent = deepDiveScopeText(result, radius);
   $('deep-dive-summary').textContent = 'Checking habitat across this area';
   $('deep-dive-demo-note').hidden = !result.recorded_at;
   $('deep-dive-demo-note').textContent = result.recorded_at
     ? 'The example assessment was recorded, while this Deep Dive runs a new live analysis using your local environmental data and current model' : '';
   showSection('deep-dive');
   setDeepDiveBusy(true);
+  // Display the requested region immediately, before any data download/model work.
+  setTimeout(() => {
+    if (deepDiveRevision === version && !deepDiveResult && !$('deep-dive-page').hidden) previewDeepDiveArea(request);
+  }, 0);
 
   try {
     const job = await api('/api/deep-dives', request);
