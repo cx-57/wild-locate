@@ -750,8 +750,11 @@ function initDeepDiveMap() {
     }
     return;
   }
+  const target = deepDiveResult || result;
+  const latitude = Number(target?.latitude);
+  const longitude = Number(target?.longitude);
   deepDiveMap = L.map('deep-dive-map', {scrollWheelZoom: true, touchZoom: true, wheelPxPerZoomLevel: 80, zoomSnap: .25, minZoom: 3, maxZoom: 18})
-    .setView([42.37, -72.28], 9);
+    .setView(Number.isFinite(latitude) && Number.isFinite(longitude) ? [latitude, longitude] : [39, -96], 9);
   deepDiveOverlay = L.layerGroup().addTo(deepDiveMap);
   const tiles = L.tileLayer(
     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -770,6 +773,27 @@ function initDeepDiveMap() {
     $('deep-dive-map-status').hidden = true;
   });
   tiles.addTo(deepDiveMap);
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => deepDiveMap?.invalidateSize({pan: false})).observe($('deep-dive-map'));
+  }
+}
+
+function previewDeepDiveArea(request) {
+  initDeepDiveMap();
+  if (!deepDiveMap || !deepDiveOverlay) return;
+  deepDiveOverlay.clearLayers();
+  deepDiveSampleMarkers.clear();
+  deepDivePlaceLayers.clear();
+  $('deep-dive-places-map-key').hidden = true;
+  const center = [Number(request.latitude), Number(request.longitude)];
+  if (!center.every(Number.isFinite)) return;
+  deepDiveBounds = L.circle(center, {
+    radius: Math.max(1, Number(request.radius_km) || 10) * 1000,
+    color: '#315b48', weight: 1.4, fillOpacity: .015,
+    interactive: false,
+  }).addTo(deepDiveOverlay).getBounds();
+  deepDiveMap.invalidateSize({pan: false});
+  deepDiveMap.fitBounds(deepDiveBounds, {padding: [26, 26], animate: false});
 }
 
 function drawDeepDiveMap(report) {
@@ -788,39 +812,16 @@ function drawDeepDiveMap(report) {
   }).addTo(deepDiveOverlay);
   deepDiveBounds = circle.getBounds();
 
-  for (const point of report.points || []) {
-    const ok = point.status === 'ok';
-    const percentile = Number(point.percentile);
-    const color = ok && Number.isFinite(percentile)
-      ? colors[Math.min(4, Math.max(0, Math.floor(percentile / 20)))]
-      : '#858585';
-    const popup = document.createElement('div');
-    popup.textContent = ok
-      ? `${coords(point.latitude, point.longitude)} — ${point.category}, ${point.percentile}th percentile`
-      : `${coords(point.latitude, point.longitude)} — unavailable`;
-    const marker = L.circleMarker([point.latitude, point.longitude], {
-      radius: 4.5,
-      color,
-      weight: .8,
-      fillColor: color,
-      fillOpacity: .88,
-      bubblingMouseEvents: false,
-    }).bindPopup(popup).addTo(deepDiveOverlay);
-    deepDiveSampleMarkers.set(`${point.latitude},${point.longitude}`, marker);
-  }
-  for (const point of report.survey_priorities || []) {
-    const marker = L.marker([point.latitude, point.longitude], {
-      icon: L.divIcon({className: 'survey-rank-marker', html: String(point.rank), iconSize: [28, 28], iconAnchor: [14, 14]}),
-      title: `Sample ${point.rank}: ${ordinal(point.percentile)} percentile`,
-    }).addTo(deepDiveOverlay);
-    const popup = document.createElement('div');
-    popup.textContent = `Sample ${point.rank} · ${ordinal(point.percentile)} percentile · ${coords(point.latitude, point.longitude)}`;
-    marker.bindPopup(popup);
-    deepDiveSampleMarkers.set(`${point.latitude},${point.longitude}`, marker);
-  }
+  // Place-focused view: do not hide named features under 81 sample markers.
   drawDeepDivePlaces(report);
+  // Leaflet must measure the *visible* element before computing the viewport.
+  deepDiveMap.invalidateSize({pan: false});
   deepDiveMap.fitBounds(deepDiveBounds, {padding: [26, 26], animate: false});
-  setTimeout(() => deepDiveMap && deepDiveMap.invalidateSize({pan: false}), 0);
+  setTimeout(() => {
+    if (!deepDiveMap || $('deep-dive-page').hidden) return;
+    deepDiveMap.invalidateSize({pan: false});
+    deepDiveMap.fitBounds(deepDiveBounds, {padding: [26, 26], animate: false});
+  }, 0);
 }
 
 function renderDeepDive(report) {
@@ -831,100 +832,22 @@ function renderDeepDive(report) {
   $('deep-dive-export').disabled = false;
   $('deep-dive-print').disabled = false;
   $('deep-dive-content').hidden = false;
-  $('deep-dive-title').textContent = `${report.species} habitat`;
+  $('deep-dive-title').textContent = `${report.species} · specific places`;
   $('deep-dive-meta').textContent = `${report.radius_km} km radius · ${report.model} · ${coords(report.latitude, report.longitude)}`;
 
   const overview = report.overview || {};
   const evaluated = overview.evaluated_points ?? 0;
   const total = overview.total_points ?? report.sample_points ?? evaluated;
-  const unavailable = overview.unavailable_points ?? report.unavailable_points ?? total - evaluated;
-  const coverage = total ? 100 * evaluated / total : 0;
-  const highShare = evaluated ? 100 * (overview.high_suitability_points || 0) / evaluated : 0;
-  const metrics = $('deep-dive-overview');
-  metrics.replaceChildren();
-  researchMetric(metrics, `${evaluated}/${total}`, 'Samples evaluated');
-  researchMetric(
-    metrics,
-    Number.isFinite(overview.median_percentile) ? ordinal(overview.median_percentile)
-      : Number.isFinite(overview.mean_percentile) ? ordinal(overview.mean_percentile) : '—',
-    Number.isFinite(overview.median_percentile) ? 'Median habitat percentile' : 'Mean habitat percentile'
-  );
-  researchMetric(metrics, evaluated ? `${Math.round(highShare)}%` : '—', 'High or very high samples');
-  researchMetric(metrics, `${Math.round(coverage)}%`, 'Sample coverage');
-
+  const mapped = report.places?.mapped_features ?? 0;
+  $('deep-dive-summary').textContent = mapped
+    ? `Examined ${mapped} mapped features around this location. Select a place below to inspect nearby environmental conditions and model comparisons.`
+    : 'No mapped roads, buildings or habitat polygons could be confirmed in the searched neighborhoods. This does not mean they are absent.';
   $('deep-dive-coverage-note').textContent =
-    `${evaluated} of ${total} sample locations evaluated · ${unavailable} unavailable · ` +
-    `Samples are approximately ${report.grid_spacing_km ?? report.radius_km / 5} km apart and do not represent continuous habitat coverage`;
+    `${evaluated} of ${total} habitat samples had usable environmental data. ` +
+    'Mapped features are searched only within selected neighborhoods; neither the map nor the models provide complete coverage of the study area.';
 
-  const strongest = overview.strongest_point;
-  const sector = overview.strongest_sector;
-  $('deep-dive-summary').textContent = !evaluated
-    ? 'No locations could be evaluated — try a smaller radius or another location, and check that the environmental datasets are available'
-    : `${overview.high_suitability_points || 0} of ${evaluated} samples have high or very high relative suitability for ${report.species}, ` +
-      (sector ? `and ${sector.name} has the highest average rank among directions with at least three samples.`
-        : 'with the map and shortlist showing where to take a closer look.');
-  $('deep-dive-overview-copy').textContent = strongest
-    ? `Strongest sample: ${ordinal(strongest.percentile)} percentile` +
-      (Number.isFinite(overview.min_percentile) && Number.isFinite(overview.max_percentile)
-        ? ` · Sample range: ${ordinal(overview.min_percentile)}–${ordinal(overview.max_percentile)} percentile` : '')
-    : 'A missing sample is a data gap, not a low-suitability result';
-
-  renderDeepDiveDistribution(report);
-  renderDeepDiveSurvey(report);
-  renderDeepDiveEvidence(report);
   renderDeepDivePlaces(report);
-
-  const habitat = report.habitat || {};
-  const explanationUnavailable = habitat.status === 'unavailable';
-  const explained = habitat.explanation_points ?? evaluated;
-  const failed = habitat.failed_explanations ?? 0;
-  $('deep-dive-insight-note').textContent = !evaluated
-    ? 'No samples could be scored, so supporting and limiting conditions could not be evaluated'
-    : explanationUnavailable
-    ? `Scores are available for ${evaluated} samples, but their explanations could not be calculated`
-    : `${explained} of ${evaluated} evaluated samples have usable model explanations` +
-      (failed ? `; ${failed} explanations failed, so signals below describe only the explained samples` : '') +
-      '. Each comparison replaces one condition with its typical value, but effects overlap and do not prove cause and effect.';
-
-  const strengths = $('deep-dive-strengths');
-  strengths.replaceChildren();
-  for (const row of habitat.strengths || []) renderDeepDiveSignal(strengths, row);
-  if (!strengths.children.length) researchRow(strengths,
-    explanationUnavailable ? 'Explanations unavailable' : 'No positive average signal',
-    !evaluated ? 'No samples could be scored — try another location or check the habitat data'
-      : explanationUnavailable ? 'The model scores were calculated, but their explanations could not be evaluated'
-      : 'No condition had a meaningful positive average effect among the explained samples');
-
-  const constraints = $('deep-dive-constraints');
-  constraints.replaceChildren();
-  for (const row of habitat.constraints || []) renderDeepDiveSignal(constraints, row);
-  if (!constraints.children.length) researchRow(constraints,
-    explanationUnavailable ? 'Explanations unavailable' : 'No negative average signal',
-    explanationUnavailable ? 'No conclusion about limiting conditions can be drawn from missing explanations'
-      : 'No condition had a meaningful negative average effect among the explained samples');
-
-  const pressures = $('deep-dive-pressures');
-  pressures.replaceChildren();
-  for (const pressure of report.pressures || []) {
-    const card = document.createElement('div');
-    card.className = 'pressure-card';
-    const strong = document.createElement('strong');
-    strong.textContent = pressure.domain;
-    const detail = document.createElement('span');
-    detail.textContent =
-      `Linked to lower scores at ${pressure.affected_points} of ${pressure.points_evaluated ?? explained} explained samples (${Math.round(pressure.affected_percentage)}%) · ` +
-      `${(pressure.features || []).map(friendlyFeature).join(', ')}`;
-    card.append(strong, detail);
-    pressures.append(card);
-  }
-  if (!pressures.children.length) {
-    const card = document.createElement('div');
-    card.className = 'pressure-card';
-    card.textContent = explanationUnavailable ? 'These conditions could not be evaluated'
-      : 'No conditions consistently lowered scores among the explained samples';
-    pressures.append(card);
-  }
-
+  renderDeepDiveEvidence(report);
   drawDeepDiveMap(report);
 }
 
@@ -1126,89 +1049,6 @@ function focusDeepDivePlace(site) {
   $('deep-dive-map').scrollIntoView({behavior: scrollBehavior(), block: 'center'});
 }
 
-function renderDeepDiveSignal(parent, row) {
-  const effect = row.mean_effect;
-  const comparison = Number.isFinite(row.mean_current) && Number.isFinite(row.mean_reference)
-    ? ` · Sample average: ${featureValue(row.feature, row.mean_current)} · typical: ${featureValue(row.feature, row.mean_reference)}` : '';
-  researchRow(parent, friendlyFeature(row.feature),
-    `${effect > 0 ? 'Supports' : 'Limits'} the score at ${row.affected_points} of ${row.points_evaluated} explained samples${comparison} · ` +
-    `Average effect: ${effect > 0 ? '+' : ''}${(effect * 100).toFixed(1)} score points on a 0–100 scale`);
-}
-
-function renderDeepDiveDistribution(report) {
-  const distribution = $('deep-dive-distribution');
-  distribution.replaceChildren();
-  for (const item of report.distribution || []) {
-    const row = document.createElement('div');
-    row.className = 'distribution-row';
-    const heading = document.createElement('div');
-    const title = document.createElement('strong');
-    title.textContent = item.category;
-    const caption = document.createElement('span');
-    caption.textContent = `${item.count} samples · ${Math.round(item.percentage)}%`;
-    heading.append(title, caption);
-    const track = document.createElement('div');
-    track.className = 'distribution-track';
-    const bar = document.createElement('span');
-    bar.className = 'distribution-bar';
-    bar.style.width = `${Math.max(0, Math.min(100, item.percentage))}%`;
-    const index = ['very low', 'low', 'moderate', 'high', 'very high'].indexOf(item.category.toLowerCase());
-    bar.style.background = colors[index] || '#858585';
-    track.append(bar);
-    row.append(heading, track);
-    distribution.append(row);
-  }
-  if (!distribution.children.length) researchRow(distribution, 'Distribution unavailable',
-    report.overview?.evaluated_points ? 'This saved report does not include the sample distribution' : 'There are no evaluated samples to compare');
-
-  const sectors = $('deep-dive-sectors');
-  sectors.replaceChildren();
-  for (const item of report.sectors || []) {
-    const row = document.createElement('div');
-    row.className = 'sector-row';
-    const heading = document.createElement('div');
-    const title = document.createElement('strong');
-    title.textContent = item.name;
-    const caption = document.createElement('span');
-    caption.textContent = `${ordinal(item.mean_percentile)} mean percentile · ${item.points} samples`;
-    heading.append(title, caption);
-    const track = document.createElement('div');
-    track.className = 'sector-track';
-    const bar = document.createElement('span');
-    bar.className = 'sector-bar';
-    bar.style.width = `${Math.max(0, Math.min(100, item.mean_percentile))}%`;
-    track.append(bar);
-    row.append(heading, track);
-    sectors.append(row);
-  }
-  if (!sectors.children.length) researchRow(sectors, 'Directional comparison unavailable', 'Usable samples in each direction are needed to compare the landscape');
-}
-
-function renderDeepDiveSurvey(report) {
-  const parent = $('deep-dive-survey-list');
-  parent.replaceChildren();
-  for (const point of report.survey_priorities || []) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'survey-sample';
-    const title = document.createElement('strong');
-    title.textContent = `${point.rank}. ${ordinal(point.percentile)} percentile · ${point.category}`;
-    const detail = document.createElement('span');
-    detail.textContent = `${point.sector} · ${point.distance_km.toFixed(1)} km from center`;
-    const location = document.createElement('span');
-    location.textContent = `${coords(point.latitude, point.longitude)} · Locate on map ↗`;
-    button.append(title, detail, location);
-    button.addEventListener('click', () => {
-      if (!deepDiveMap) return;
-      deepDiveMap.setView([point.latitude, point.longitude], 13);
-      deepDiveSampleMarkers.get(`${point.latitude},${point.longitude}`)?.openPopup();
-      $('deep-dive-map').scrollIntoView({behavior: scrollBehavior(), block: 'center'});
-    });
-    parent.append(button);
-  }
-  if (!parent.children.length) researchRow(parent, 'No field shortlist available', 'Usable ranked samples are needed to identify locations to investigate');
-}
-
 function renderDeepDiveEvidence(report) {
   const parent = $('deep-dive-evidence-stats');
   parent.replaceChildren();
@@ -1308,7 +1148,7 @@ async function startDeepDive() {
   $('deep-dive-content').hidden = true;
   $('deep-dive-error').hidden = true;
   $('deep-dive-retry').hidden = true;
-  $('deep-dive-title').textContent = `${result.species} habitat`;
+  $('deep-dive-title').textContent = `${result.species} · specific places`;
   $('deep-dive-meta').textContent =
     `${radius} km · ${result.analysis_type === 'regional' ? 'regional' : 'point'} analysis`;
   $('deep-dive-summary').textContent = 'Checking habitat across this area';
@@ -1317,6 +1157,10 @@ async function startDeepDive() {
     ? 'The example assessment was recorded, while this Deep Dive runs a new live analysis using your local environmental data and current model' : '';
   showSection('deep-dive');
   setDeepDiveBusy(true);
+  // Display the requested region immediately, before any data download/model work.
+  setTimeout(() => {
+    if (deepDiveRevision === version && !$('deep-dive-page').hidden) previewDeepDiveArea(request);
+  }, 0);
 
   try {
     const job = await api('/api/deep-dives', request);
