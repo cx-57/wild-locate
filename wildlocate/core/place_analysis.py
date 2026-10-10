@@ -301,7 +301,7 @@ def analyze_places(points, latitude, longitude, radius_km, region, evaluate):
             "had usable local model assessments."
         )
     elif report["mapping_status"] == "unavailable":
-        report["summary"] = "Mapped roads and buildings could not be retrieved here; this does not mean they are absent."
+        report["summary"] = "Mapping unavailable: mapped roads and buildings could not be retrieved here; this does not mean they are absent."
     else:
         report["status"] = "no_signal"
         report["summary"] = "No supported mapped places were found in the searched neighborhoods; map coverage is incomplete."
