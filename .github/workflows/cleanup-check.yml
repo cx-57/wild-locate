@@ -39,6 +39,7 @@ jobs:
         with:
           node-version: "22"
       - name: Check browser JavaScript
-        run: node --check wildlocate/web/app.js
+        run: |
+          for file in wildlocate/web/*.js; do node --check "$file"; done
       - name: Browser regression tests
         run: node --test tests/web_client.test.cjs tests/web_places.test.cjs
