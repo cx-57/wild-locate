@@ -290,6 +290,53 @@ test('Point analyses expand to a 10 km Deep Dive area',async()=>{
   assert.match(b.get('deep-dive-meta').textContent,/10 km/);
 });
 
+test('Point results keep percentile and Deep Dive visible with optional details collapsed',async()=>{
+  const b=await browser();
+  b.context.assessment={...complete.result,insights:{influences:[],scenarios:[]}};
+  b.run('showResult(assessment)');
+  assert.equal(b.get('point-percentile').hidden,false);
+  assert.equal(b.get('percentile-value').textContent,'50th percentile');
+  assert.equal(b.get('assessment-details').open,false);
+  assert.match(b.get('deep-dive-cta-copy').textContent,/one point|10 km radius|not just this point/i);
+  const html=fs.readFileSync('wildlocate/web/index.html','utf8');
+  assert.ok(html.indexOf('id="deep-dive-cta"') < html.indexOf('id="assessment-details"'));
+  assert.ok(html.indexOf('id="assessment-details"') < html.indexOf('id="point-insights"'));
+  assert.ok(html.indexOf('id="assessment-details"') < html.indexOf('id="scenario-panel"'));
+  assert.ok(html.indexOf('id="assessment-details"') < html.indexOf('id="evidence-panel"'));
+  b.get('assessment-details').open=true;
+  b.run('showResult(assessment)');
+  assert.equal(b.get('assessment-details').open,false,'New assessment should reset to compact view');
+});
+
+test('Point-to-region transition explicitly describes 10 km analysis in Deep Dive',async()=>{
+  const b=await browser();
+  b.context.assessment={...complete.result,region:'MA'};
+  b.run('showResult(assessment)');
+  b.context.fetch=async(path)=>path==='/api/deep-dives'
+    ? response({id:'point-radius',status:'running'})
+    : response({status:'complete',result:{...deepDiveReport,radius_km:10}});
+  await b.get('deep-dive-launch').click();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.match(b.get('deep-dive-scope-note').textContent,/Started from one point/);
+  assert.match(b.get('deep-dive-scope-note').textContent,/10 km radius/);
+  assert.match(b.get('deep-dive-scope-note').textContent,/not just that coordinate/);
+});
+
+test('Regional overview keeps its chosen radius and details collapsed',async()=>{
+  const b=await browser();
+  b.context.assessment={...complete.result,analysis_type:'regional',radius_km:25,
+    evaluated_points:2,points:[{latitude:42.37,longitude:-72.28,status:'ok',percentile:50,score:.5,category:'Moderate'}]};
+  b.run('showResult(assessment)');
+  assert.equal(b.get('metrics').hidden,false);
+  assert.equal(b.get('assessment-details').open,false);
+  assert.match(b.get('deep-dive-cta-copy').textContent,/25 km region/);
+  assert.doesNotMatch(b.get('deep-dive-cta-copy').textContent,/10 km radius/);
+  b.run("deepDiveSource=assessment");
+  b.context.report={...deepDiveReport,radius_km:25};
+  b.run('renderDeepDive(report)');
+  assert.match(b.get('deep-dive-scope-note').textContent,/original 25 km radius/);
+});
+
 test('Scenario percentages render their exact outcomes, including a decline',async()=>{
   const b=await browser();
   b.get('scenario-level').value='0.25';
