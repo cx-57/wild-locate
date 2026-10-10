@@ -141,7 +141,7 @@ test('Older reports and unavailable mapping do not imply that damaging features 
   const b=await browser();
   setReport(b,{});
   assert.equal(b.get('deep-dive-places-list').children.length,0);
-  assert.match(b.get('deep-dive-places-summary').textContent,/saved report|not included/i);
+  assert.match(b.get('deep-dive-places-summary').textContent,/no specific-place analysis|saved report|not included/i);
   setReport(b,{places:{...places,status:'unavailable',sites:[],mapped_features:0,assessed_features:0}});
   assert.match(b.get('deep-dive-places-summary').textContent,/unavailable|could not/i);
   assert.doesNotMatch(b.get('deep-dive-places-summary').textContent,/no roads|no buildings|no damage/i);
