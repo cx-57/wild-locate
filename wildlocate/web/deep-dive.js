@@ -72,9 +72,9 @@ function drawDeepDiveMap(report) {
   }).addTo(deepDiveOverlay);
   deepDiveBounds = circle.getBounds();
 
-  // Place-focused view: do not hide named features under 81 sample markers.
+  // Keep mapped places visible instead of covering them with sample markers
   drawDeepDivePlaces(report);
-  // Leaflet must measure the *visible* element before computing the viewport.
+  // Let Leaflet measure the visible map before fitting bounds
   deepDiveMap.invalidateSize({pan: false});
   deepDiveMap.fitBounds(deepDiveBounds, {padding: [26, 26], animate: false});
   setTimeout(() => {
@@ -447,7 +447,7 @@ async function startDeepDive() {
     ? 'The example assessment was recorded, while this Deep Dive runs a new live analysis using your local environmental data and current model' : '';
   showSection('deep-dive');
   setDeepDiveBusy(true);
-  // Display the requested region immediately, before any data download/model work.
+  // Show the selected area while the model analyzes it
   setTimeout(() => {
     if (deepDiveRevision === version && !deepDiveResult && !$('deep-dive-page').hidden) previewDeepDiveArea(request);
   }, 0);
