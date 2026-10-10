@@ -156,7 +156,7 @@ $('sign-out').addEventListener('click', async () => {
     config = data;
     token = data.token;
   } catch (_) {
-    // The server may already have reset. Either way return to the sign-in screen.
+    // Return to sign-in even if the server already cleared the session
   }
   activeJob = null;
   result = null;
