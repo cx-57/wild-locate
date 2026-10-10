@@ -16,9 +16,7 @@ class PredictionClient(QObject):
         super().__init__(parent)
         self.process = QProcess(self)
         interpreter = Path(sys.executable)
-        # A .pyw launch uses pythonw, whose standard streams may be absent.
-        # QProcess supplies pipes to the console interpreter without requiring
-        # a terminal window; use the sibling from the same virtual environment.
+        # Launch the console Python next to pythonw so QProcess can capture output
         if interpreter.name.lower() == "pythonw.exe":
             interpreter = interpreter.with_name("python.exe")
         self.process.setProgram(str(interpreter))
@@ -191,4 +189,3 @@ class TrainingClient(QObject):
         self.close()
         self.event_received.emit({"event": "cancelled"})
 
-# Local account sign-in
