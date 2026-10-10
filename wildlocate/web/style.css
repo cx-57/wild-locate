@@ -209,7 +209,11 @@ body.busy .status:before { content: ""; display: inline-block; width: 7px; heigh
 .deep-dive-field-grid > * { margin-bottom: 0; }
 .deep-dive-section-heading { padding: 23px 26px 16px; }
 .deep-dive-section-heading .hint { margin-bottom: 0; }
-#deep-dive-map { height: 385px; background: #e6ecdc; z-index: 0; }
+#deep-dive-map { height: min(55vh, 520px); min-height: 380px; background: #e6ecdc; z-index: 0; }
+.deep-dive-location-map { overflow: hidden; margin-bottom: 22px; }
+.deep-dive-location-map .deep-dive-section-heading h2 { margin-bottom: 7px; }
+.places-panel > .landscape-summary { margin: 13px 0; font-size: 15px; }
+.places-panel .coverage-note { margin-bottom: 14px; }
 .map-key { padding: 0 26px 17px; }
 .map-key .legend { margin: 16px 0 9px; }
 .map-key .hint { font-size: 12px; }
