@@ -280,6 +280,12 @@ def analyze_places(points, latitude, longitude, radius_km, region, evaluate):
     candidates.extend(terrain_candidates)
     report["candidate_features"] = len(candidates)
     report["terrain_samples"] = len(terrain_candidates)
+    if terrain_candidates:
+        report["sources"].append({
+            "name": "USGS 3DEP elevation-derived terrain samples",
+            "url": "https://www.usgs.gov/3d-elevation-program",
+            "coverage": "Only selected, successfully scored geographic coordinates",
+        })
     sites = []
     for candidate in candidates:
         site = {key: value for key, value in candidate.items() if not key.startswith("_")}
