@@ -239,23 +239,40 @@ def analyze_places(points, latitude, longitude, radius_km, region, evaluate):
     report["candidate_features"] = len(candidates)
     sites = []
     for candidate in candidates:
+        site = {key: value for key, value in candidate.items() if not key.startswith("_")}
+        site.update(signals=[], supporting_signals=[], strongest_signal_points=0.0,
+                    assessment_status="unavailable", field_checks=_field_checks(candidate["kind"]))
         try:
-            assessment = candidate.get("_sample") or evaluate(candidate["latitude"], candidate["longitude"])
+            assessment = evaluate(candidate["latitude"], candidate["longitude"])
             _validate_assessment(assessment)
         except Exception:
             report["failed_evaluations"] += 1
-            logger.warning("Specific-place evaluation unavailable for %s", candidate.get("id"))
+            logger.warning("Specific-place model assessment unavailable for %s", candidate.get("id"))
+            site["assessment_note"] = (
+                "This feature is mapped, but environmental data or model explanations "
+                "were unavailable here. No ecological effect can be inferred.")
+            sites.append(site)
             continue
         report["assessed_features"] += 1
-        signals = _negative_signals(assessment, candidate["kind"], terrain_only="_sample" in candidate)
-        if not signals:
-            continue
-        site = {key: value for key, value in candidate.items() if not key.startswith("_")}
-        site.update(score=float(assessment["score"]), percentile=float(assessment["percentile"]),
-                    category=assessment.get("category", ""), signals=signals[:3],
-                    strongest_signal_points=-signals[0]["effect"] * 100,
-                    terrain_sample="_sample" in candidate,
-                    field_checks=_field_checks(candidate["kind"], "_sample" in candidate))
+        negative = _negative_signals(assessment, candidate["kind"])
+        positive = sorted(
+            ({"feature": row["feature"], "effect": float(row["effect"]),
+              "current": float(row["current"]), "reference": float(row["reference"])}
+             for row in assessment["influences"]
+             if _relevant(candidate["kind"], row["feature"]) and row["effect"] >= MIN_EFFECT),
+            key=lambda row: (-row["effect"], row["feature"]))
+        site.update(
+            assessment_status="available",
+            score=float(assessment["score"]), percentile=float(assessment["percentile"]),
+            category=assessment.get("category", ""), signals=negative[:3],
+            supporting_signals=positive[:3],
+            strongest_signal_points=-negative[0]["effect"] * 100 if negative else 0.0,
+            assessment_note=(
+                "Nearby environmental conditions have model-linked limiting factors."
+                if negative else
+                "No substantial limiting model comparison was detected at this place. "
+                "That does not mean the mapped feature has no environmental effects."
+            ))
         nearby = [p for p in points if p.get("status") == "ok" and _located(p)
                   and _finite(p.get("percentile")) and p["percentile"] >= 60]
         nearest = min(nearby, key=lambda p: _distance(candidate, p), default=None)
@@ -264,7 +281,10 @@ def analyze_places(points, latitude, longitude, radius_km, region, evaluate):
                                       "distance_m": round(_distance(candidate, nearest)),
                                       "percentile": nearest["percentile"]}
         sites.append(site)
-    sites.sort(key=lambda p: (-p["strongest_signal_points"], _distance(p, center), str(p["id"])))
+    # Prefer places with evidence of limiting conditions, but never hide real
+    # features merely because their modeled association is neutral or unknown.
+    sites.sort(key=lambda p: (p["assessment_status"] != "available",
+                              -p["strongest_signal_points"], _distance(p, center), str(p["id"])))
     counts = {kind: 0 for kind in ("road", "building", "habitat")}
     for site in sites:
         if counts[site["kind"]] < MAX_SITES_PER_KIND:
@@ -276,14 +296,13 @@ def analyze_places(points, latitude, longitude, radius_km, region, evaluate):
     if report["sites"]:
         report["status"] = "partial" if report["mapping_status"] != "available" or report["failed_evaluations"] else "available"
         report["summary"] = (
-            f"{len(report['sites'])} places stand out among {report['assessed_features']} evaluated locations "
-            "because nearby conditions lower the model score relative to typical conditions"
+            f"{len(report['sites'])} specific mapped locations selected for investigation; "
+            f"{report['assessed_features']} of {report['candidate_features']} candidates "
+            "had usable local model assessments."
         )
-    elif report["assessed_features"]:
-        report["status"] = "no_signal"
-        report["summary"] = "No relevant negative model signal stood out among the evaluated places; this does not establish that the area is free of habitat pressures"
+    elif report["mapping_status"] == "unavailable":
+        report["summary"] = "Mapped roads and buildings could not be retrieved here; this does not mean they are absent."
     else:
-        report["summary"] = "Place-level comparisons are unavailable; the landscape results above are still usable"
-    if any("_sample" in candidate for candidate in candidates):
-        report["sources"].append({"name": "USGS 3DEP elevation", "url": "https://www.usgs.gov/3d-elevation-program"})
+        report["status"] = "no_signal"
+        report["summary"] = "No supported mapped places were found in the searched neighborhoods; map coverage is incomplete."
     return report
