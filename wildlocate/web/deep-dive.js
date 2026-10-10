@@ -147,6 +147,14 @@ function placeSourceLink(parent, label, value) {
   } catch (_) { /* Missing or invalid source URLs remain plain text */ }
 }
 
+function placeSignals(site, key, direction) {
+  const signals = Array.isArray(site[key]) ? site[key] : [];
+  return signals.filter(signal =>
+    signal && typeof signal.feature === 'string' &&
+    Number.isFinite(signal.effect) && direction * signal.effect > 0 &&
+    Number.isFinite(signal.current) && Number.isFinite(signal.reference));
+}
+
 function renderDeepDivePlaces(report) {
   const places = report.places;
   const parent = $('deep-dive-places-list');
@@ -194,12 +202,8 @@ function renderDeepDivePlaces(report) {
     kind.className = `place-type ${['road', 'building', 'habitat'].includes(site.kind) ? site.kind : ''}`;
     kind.textContent = placeLabel(site);
     head.append(focus, kind);
-    const signals = (Array.isArray(site.signals) ? site.signals : []).filter(signal =>
-      signal && typeof signal.feature === 'string' && Number.isFinite(signal.effect) && signal.effect < 0 &&
-      Number.isFinite(signal.current) && Number.isFinite(signal.reference));
-    const supporting = (Array.isArray(site.supporting_signals) ? site.supporting_signals : []).filter(signal =>
-      signal && typeof signal.feature === 'string' && Number.isFinite(signal.effect) && signal.effect > 0 &&
-      Number.isFinite(signal.current) && Number.isFinite(signal.reference));
+    const signals = placeSignals(site, 'signals', -1);
+    const supporting = placeSignals(site, 'supporting_signals', 1);
     const strongest = [...signals].sort((a, b) => a.effect - b.effect)[0];
     const positive = [...supporting].sort((a, b) => b.effect - a.effect)[0];
     const comparison = document.createElement('p');
@@ -296,6 +300,8 @@ function renderDeepDivePlaces(report) {
 }
 
 function validPlaceGeometry(geometry) {
+  // Mapping data is external input: validate coordinate nesting and cap the
+  // number of points before handing a geometry to Leaflet.
   const depths = {Point: 0, LineString: 1, MultiLineString: 2, Polygon: 2, MultiPolygon: 3};
   if (!geometry || !Object.hasOwn(depths, geometry.type)) return false;
   let count = 0;
