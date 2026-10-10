@@ -111,13 +111,22 @@ wildlocate/
 │   ├── place_analysis.py  # actual-place model comparisons and field priorities
 │   └── worker.py          # isolated prediction/training subprocesses
 ├── gui/
-│   ├── app.py             # complete PyQt desktop interface
+│   ├── app.py             # desktop map and main window
+│   ├── views.py           # desktop result panels
+│   ├── dialogs.py         # account and species dialogs
+│   ├── jobs.py            # background Qt processes
+│   ├── ui.py              # shared widgets and styles
 │   └── map.html           # desktop Leaflet map
 └── web/
-    ├── server.py          # loopback HTTP server
+    ├── server.py          # local HTTP routes
+    ├── jobs.py            # background server processes
     ├── index.html
     ├── style.css
-    └── app.js
+    ├── app.js             # shared state and map
+    ├── habitat.js         # habitat results
+    ├── deep-dive.js       # individual-place analysis
+    ├── report.js          # printing and navigation
+    └── species.js         # species training
 ```
 
 The desktop and browser interfaces call the same Python prediction and training code. Model logic is not duplicated in JavaScript.
@@ -150,7 +159,7 @@ Set `WILDLOCATE_DATA_DIR` to override that location.
 ```bash
 python -m compileall -q wildlocate tests
 python -m unittest discover -s tests -p "test_*.py"
-node --check wildlocate/web/app.js
+for file in wildlocate/web/*.js; do node --check "$file"; done
 node --test tests/web_client.test.cjs
 ```
 
