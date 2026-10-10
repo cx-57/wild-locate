@@ -147,11 +147,11 @@ function placeSourceLink(parent, label, value) {
   } catch (_) { /* Missing or invalid source URLs remain plain text */ }
 }
 
-function placeSignals(site, key, direction) {
-  const signals = Array.isArray(site[key]) ? site[key] : [];
+function validPlaceSignals(values) {
+  const signals = Array.isArray(values) ? values : [];
   return signals.filter(signal =>
     signal && typeof signal.feature === 'string' &&
-    Number.isFinite(signal.effect) && direction * signal.effect > 0 &&
+    Number.isFinite(signal.effect) &&
     Number.isFinite(signal.current) && Number.isFinite(signal.reference));
 }
 
@@ -202,8 +202,8 @@ function renderDeepDivePlaces(report) {
     kind.className = `place-type ${['road', 'building', 'habitat'].includes(site.kind) ? site.kind : ''}`;
     kind.textContent = placeLabel(site);
     head.append(focus, kind);
-    const signals = placeSignals(site, 'signals', -1);
-    const supporting = placeSignals(site, 'supporting_signals', 1);
+    const signals = validPlaceSignals(site.signals).filter(signal => signal.effect < 0);
+    const supporting = validPlaceSignals(site.supporting_signals).filter(signal => signal.effect > 0);
     const strongest = [...signals].sort((a, b) => a.effect - b.effect)[0];
     const positive = [...supporting].sort((a, b) => b.effect - a.effect)[0];
     const comparison = document.createElement('p');
