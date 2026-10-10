@@ -884,13 +884,13 @@ function renderDeepDivePlaces(report) {
   const sites = Array.isArray(places?.sites) ? places.sites.filter(validPlaceLocation).slice(0, 9) : [];
   const status = places?.status;
   $('deep-dive-places-status').textContent = !places ? 'Earlier report'
-    : ({available: 'Mapped places', partial: 'Partial analysis', unavailable: 'Mapping unavailable', no_signal: 'No limiting comparison'})[status] || 'Mapping incomplete';
+    : ({available: 'Mapped places', partial: 'Partial analysis', unavailable: 'Mapping unavailable', no_signal: 'No mapped locations'})[status] || 'Mapping incomplete';
   $('deep-dive-places-summary').textContent = !places
-    ? 'Specific places were not included in this saved report — run a new Deep Dive to investigate roads, buildings and terrain'
+    ? 'This report contains no specific-place analysis — run a new Deep Dive to investigate individual mapped roads, buildings, and habitat areas'
     : status === 'unavailable' && !sites.length
     ? 'Mapped places could not be evaluated, so no conclusion can be drawn about individual roads or buildings'
     : status === 'no_signal' && !sites.length
-    ? 'No relevant negative model comparison stood out among the evaluated places; this does not establish that these places are free of habitat pressures'
+    ? 'No supported mapped features were retrieved in the inspected neighborhoods. Incomplete coverage cannot establish their absence'
     : places.summary || 'Named places with surrounding conditions worth checking in the field';
   const areas = Array.isArray(places?.searched_areas) ? places.searched_areas.filter(validPlaceLocation) : [];
   const radii = [...new Set(areas.filter(area => Number.isFinite(area.radius_m)).map(area => area.radius_m / 1000))];
@@ -898,7 +898,7 @@ function renderDeepDivePlaces(report) {
   $('deep-dive-places-coverage').textContent = places
     ? `${areas.length} selected ${size}neighborhood${areas.length === 1 ? '' : 's'} for search · ${places.mapped_features ?? 0} mapped features · ${places.assessed_features ?? 0} evaluated` +
       (places.failed_evaluations ? ` · ${places.failed_evaluations} evaluations failed` : '') +
-      ' · Coverage is limited to these neighborhoods, rather than the full study area'
+      ' · This is a partial map search, not an inventory of all places in the area'
     : '';
   $('deep-dive-places-map-key').hidden = !sites.length;
   sites.forEach((site, index) => {
@@ -925,15 +925,25 @@ function renderDeepDivePlaces(report) {
     const signals = (Array.isArray(site.signals) ? site.signals : []).filter(signal =>
       signal && typeof signal.feature === 'string' && Number.isFinite(signal.effect) && signal.effect < 0 &&
       Number.isFinite(signal.current) && Number.isFinite(signal.reference));
+    const supporting = (Array.isArray(site.supporting_signals) ? site.supporting_signals : []).filter(signal =>
+      signal && typeof signal.feature === 'string' && Number.isFinite(signal.effect) && signal.effect > 0 &&
+      Number.isFinite(signal.current) && Number.isFinite(signal.reference));
     const strongest = [...signals].sort((a, b) => a.effect - b.effect)[0];
+    const positive = [...supporting].sort((a, b) => b.effect - a.effect)[0];
     const comparison = document.createElement('p');
     comparison.className = 'place-comparison';
     comparison.textContent = strongest
-      ? `−${(-strongest.effect * 100).toFixed(1)} score points · strongest condition comparison`
-      : 'Condition comparisons unavailable';
+      ? `−${(-strongest.effect * 100).toFixed(1)} model-score points · limiting local condition`
+      : positive
+      ? `+${(positive.effect * 100).toFixed(1)} model-score points · supporting local condition`
+      : site.assessment_status === 'unavailable'
+      ? 'Mapped feature · local model assessment unavailable'
+      : 'Mapped feature · no substantial model limitation identified';
     const caption = document.createElement('p');
     caption.className = 'place-caption';
-    caption.textContent = strongest ? friendlyFeature(strongest.feature) : 'The score describes conditions around this location';
+    caption.textContent = strongest ? friendlyFeature(strongest.feature)
+      : positive ? friendlyFeature(positive.feature)
+      : (site.assessment_note || 'No measured model effect can be attributed to this individual feature');
     if (Number.isFinite(site.percentile)) caption.textContent += ` · ${ordinal(site.percentile)} habitat percentile`;
     const details = document.createElement('details');
     details.className = 'place-evidence';
@@ -945,7 +955,10 @@ function renderDeepDivePlaces(report) {
     if (Number.isFinite(site.length_m)) researchRow(body, `Mapped road length${sizeScope}`, `${Math.round(site.length_m).toLocaleString()} m`);
     if (Number.isFinite(site.area_m2)) researchRow(body, `Mapped footprint${sizeScope}`, `${Math.round(site.area_m2).toLocaleString()} m²`);
     for (const signal of signals) researchRow(body, friendlyFeature(signal.feature),
-      `Here: ${featureValue(signal.feature, signal.current)} · typical: ${featureValue(signal.feature, signal.reference)} · comparison: −${(-signal.effect * 100).toFixed(1)} score points`);
+      `Here: ${featureValue(signal.feature, signal.current)} · typical: ${featureValue(signal.feature, signal.reference)} · limiting model comparison: −${(-signal.effect * 100).toFixed(1)} score points`);
+    for (const signal of supporting) researchRow(body, friendlyFeature(signal.feature),
+      `Here: ${featureValue(signal.feature, signal.current)} · typical: ${featureValue(signal.feature, signal.reference)} · supporting model comparison: +${(signal.effect * 100).toFixed(1)} score points`);
+    if (typeof site.assessment_note === 'string') researchRow(body, 'Interpretation', site.assessment_note);
     if (site.nearby_habitat && Number.isFinite(site.nearby_habitat.distance_m) && Number.isFinite(site.nearby_habitat.percentile)) {
       researchRow(body, 'Nearby habitat sample', `${ordinal(site.nearby_habitat.percentile)} percentile · ${Math.round(site.nearby_habitat.distance_m).toLocaleString()} m away, without confirming habitat between the locations`);
     }
@@ -977,7 +990,7 @@ function renderDeepDivePlaces(report) {
     evidence.append(p);
   }
   const note = document.createElement('p');
-  note.textContent = 'Places are ranked by their strongest relevant negative model comparison, rather than a sum of effects or proof that a structure caused damage. Missing mapping does not mean roads, buildings or pressures are absent.';
+  note.textContent = 'Rankings prioritize the strongest limiting nearby model association; other mapped places are retained even with neutral or missing model results. These comparisons cannot prove that a named road or building caused environmental harm.';
   evidence.append(note);
   const sources = document.createElement('div');
   sources.className = 'place-sources';
