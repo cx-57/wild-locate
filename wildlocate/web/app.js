@@ -1172,7 +1172,7 @@ async function startDeepDive() {
   setDeepDiveBusy(true);
   // Display the requested region immediately, before any data download/model work.
   setTimeout(() => {
-    if (deepDiveRevision === version && !$('deep-dive-page').hidden) previewDeepDiveArea(request);
+    if (deepDiveRevision === version && !deepDiveResult && !$('deep-dive-page').hidden) previewDeepDiveArea(request);
   }, 0);
 
   try {
