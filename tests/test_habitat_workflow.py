@@ -8,7 +8,10 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
-from wildlocate.core.predict import habitat_insights, model_evidence, validate_lat_lon
+from wildlocate.core.predict import (
+    habitat_insights, load_comparison_scores, model_evidence,
+    percentile_of_score, validate_lat_lon,
+)
 from wildlocate.core.registry import ModelRecord, available_models, model_health
 
 
@@ -59,3 +62,71 @@ class HabitatWorkflowTests(unittest.TestCase):
                                   'metrics_by_model': [{'model': 'Test', 'mean_pr_auc': .4}]})
         self.assertEqual(evidence['pr_reference'], .25)
         self.assertEqual(evidence['pr_auc'], .4)
+
+
+class ComparisonValidationTests(unittest.TestCase):
+    def comparison_record(self, root, contents):
+        path = root / 'features.csv'
+        path.write_text(contents)
+        return ModelRecord('reference', 'Test', root / 'model.joblib', root / 'metrics.json', path)
+
+    def test_all_required_columns_are_checked_before_prediction(self):
+        with tempfile.TemporaryDirectory() as folder:
+            record = self.comparison_record(Path(folder), 'developed_fraction_250m\n0.2\n')
+            with self.assertRaisesRegex(ValueError, 'forest_fraction_250m'):
+                load_comparison_scores(DevelopmentModel(), [
+                    'developed_fraction_250m', 'forest_fraction_250m',
+                ], 'Test', record)
+
+    def test_empty_or_nonfinite_reference_features_are_rejected(self):
+        for contents in (
+            'developed_fraction_250m\n',
+            'developed_fraction_250m\nNaN\n',
+            'developed_fraction_250m\ninf\n',
+        ):
+            with self.subTest(contents=contents), tempfile.TemporaryDirectory() as folder:
+                record = self.comparison_record(Path(folder), contents)
+                with self.assertRaises(ValueError):
+                    load_comparison_scores(DevelopmentModel(), ['developed_fraction_250m'], 'Test', record)
+
+    def test_invalid_reference_predictions_are_rejected(self):
+        class InvalidModel:
+            def __init__(self, output):
+                self.output = output
+
+            def predict_proba(self, frame):
+                return self.output
+
+        for output in (
+            np.array([[.5, np.nan]]), np.array([[.5, np.inf]]),
+            np.array([.5]), np.empty((0, 2)), np.array([[.5]]),
+        ):
+            with self.subTest(output=output), tempfile.TemporaryDirectory() as folder:
+                record = self.comparison_record(Path(folder), 'developed_fraction_250m\n0.2\n')
+                with self.assertRaises(ValueError):
+                    load_comparison_scores(InvalidModel(output), ['developed_fraction_250m'], 'Test', record)
+
+    def test_invalid_comparison_scores_cannot_bias_percentiles(self):
+        for values in (
+            np.array([]), np.array([.25, np.nan]), np.array([.25, np.inf]),
+            np.array([[.25, .5]]),
+        ):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                percentile_of_score(.75, values)
+
+    def test_nonfinite_target_score_is_rejected(self):
+        for score in (np.nan, np.inf):
+            with self.subTest(score=score), self.assertRaises(ValueError):
+                percentile_of_score(score, np.array([.25, .5]))
+
+    def test_valid_reference_keeps_strictly_lower_ranking_and_predictor_order(self):
+        with tempfile.TemporaryDirectory() as folder:
+            record = self.comparison_record(
+                Path(folder), 'forest_fraction_250m,developed_fraction_250m\n0.8,0.2\n0.6,0.4\n'
+            )
+            scores, comparison = load_comparison_scores(
+                DevelopmentModel(), ['developed_fraction_250m', 'forest_fraction_250m'], 'Test', record
+            )
+        np.testing.assert_allclose(scores, [.2, .3])
+        self.assertEqual(len(comparison), 2)
+        self.assertEqual(percentile_of_score(.3, np.array([.2, .3])), 50)

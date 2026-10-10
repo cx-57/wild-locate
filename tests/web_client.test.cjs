@@ -3,11 +3,12 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
 
-async function browser() {
+async function browser({missingIds=[]}={}) {
   const nodes = new Map();
-  function element() {
+  function element(tagName='div') {
     let value='';
     return {
+      tagName:tagName.toUpperCase(),
       get value(){return value;}, set value(next){value=String(next);},
       textContent:'', hidden:false, disabled:false, open:false,
       className:'', style:{},
@@ -28,6 +29,7 @@ async function browser() {
     };
   }
   const get = id => {
+    if(missingIds.includes(id)) return null;
     if(!nodes.has(id)) nodes.set(id,element());
     return nodes.get(id);
   };
@@ -67,6 +69,7 @@ async function browser() {
     setTimeout:()=>0,
     setInterval:()=>0,
     clearInterval(){},
+    clearTimeout(){},
     Blob:function(){},
     URL:{createObjectURL:()=> 'blob:test', revokeObjectURL(){}},
   });
@@ -258,8 +261,8 @@ test('Deep Dive opens a separate in-app workspace and preserves the habitat resu
   assert.equal(b.get('deep-dive-page').hidden,false);
   assert.equal(b.get('deep-dive-content').hidden,false);
   assert.match(b.get('deep-dive-title').textContent,/Bobcat/);
-  assert.match(textOf(b.get('deep-dive-strengths')),/forest cover 1 km/i);
-  assert.match(textOf(b.get('deep-dive-constraints')),/impervious surface 1 km/i);
+  assert.match(textOf(b.get('deep-dive-strengths')),/forest cover within 1 km/i);
+  assert.match(textOf(b.get('deep-dive-constraints')),/pavement and rooftops within 1 km/i);
   assert.match(textOf(b.get('deep-dive-pressures')),/Development/);
 
   b.get('deep-dive-back').click();
@@ -326,4 +329,227 @@ test('Recorded example preserves its origin and does not sign into an account',a
   assert.match(b.get('assessment-origin').textContent,/Recorded Amherst example/);
   assert.equal(b.run('regional'),false);
   assert.equal(b.get('result').hidden,false);
+});
+
+test('Deep Dive cancellation suppresses a completion response already in flight',async()=>{
+  const b=await browser();
+  let finishPoll,finishCancel;
+  b.context.fetch=path=>new Promise(resolve=>{
+    if(path.endsWith('/cancel')) finishCancel=resolve;
+    else finishPoll=resolve;
+  });
+  b.run("deepDiveJobId='deep-race';setDeepDiveBusy(true)");
+  b.get('deep-dive-content').hidden=true;
+  const polling=b.run("pollDeepDive('deep-race',deepDiveRevision)");
+  const cancelling=b.get('deep-dive-cancel').click();
+  finishPoll(response({status:'complete',result:deepDiveReport}));
+  await polling;
+  finishCancel(response({status:'complete'}));
+  await cancelling;
+  assert.equal(b.get('deep-dive-content').hidden,true);
+  assert.equal(b.run('deepDiveBusy'),false);
+  assert.match(b.get('deep-dive-error').textContent,/cancelled/i);
+});
+
+test('A late Deep Dive start cannot restore a job after leaving the account',async()=>{
+  const b=await browser();
+  b.context.assessment={...complete.result,region:'MA'};
+  b.run('showResult(assessment)');
+  let finishStart;
+  b.context.fetch=path=>{
+    if(path==='/api/deep-dives') return new Promise(resolve=>{finishStart=resolve;});
+    if(path==='/api/auth/logout') return Promise.resolve(response({token:'new',authenticated:false,regions:[]}));
+    throw Error('A stale job must not be polled: '+path);
+  };
+  const starting=b.get('deep-dive-launch').click();
+  await b.get('sign-out').click();
+  finishStart(response({id:'stale-deep',status:'running'}));
+  await starting;
+  assert.equal(b.run('deepDiveJobId'),null);
+  assert.equal(b.run('deepDiveBusy'),false);
+});
+
+test('Deep Dive explains partial sample coverage and renders distribution and survey locations',async()=>{
+  const b=await browser();
+  b.context.report={...deepDiveReport,
+    unavailable_points:21,
+    overview:{...deepDiveReport.overview,evaluated_points:60,total_points:81,
+      coverage_percentage:74.074,median_percentile:70,min_percentile:10,max_percentile:95,
+      high_suitability_points:40,high_suitability_percentage:66.667},
+    distribution:[{category:'Very Low',count:10,percentage:16.667},{category:'High',count:40,percentage:66.667}],
+    sectors:[{name:'Northwest',mean_percentile:77,points:10}],
+    survey_priorities:[{rank:1,latitude:42.4,longitude:-72.3,score:.9,percentile:95,category:'Very High',sector:'Northwest',distance_km:3.2}],
+    habitat:{...deepDiveReport.habitat,status:'available',explanation_points:60,failed_explanations:0},
+    evidence:{presence_count:405,background_count:810,folds:5,spatial_block_km:10,roc_auc:.82,pr_auc:.71,
+      sources:['iNaturalist research-grade observations'],interpretation:'Spatial validation against sampled background.'},
+  };
+  b.run('renderDeepDive(report)');
+  assert.match(b.get('deep-dive-coverage-note').textContent,/60.*81/);
+  assert.match(b.get('deep-dive-coverage-note').textContent,/21.*unavailable/i);
+  assert.match(textOf(b.get('deep-dive-distribution')),/High.*40/);
+  assert.match(textOf(b.get('deep-dive-sectors')),/Northwest.*77th/);
+  assert.match(textOf(b.get('deep-dive-survey-list')),/95th/);
+  assert.match(textOf(b.get('deep-dive-survey-list')),/42\.4000/);
+  assert.match(textOf(b.get('deep-dive-evidence-stats')),/405/);
+  assert.match(b.get('deep-dive-evidence-sources').textContent,/iNaturalist/);
+});
+
+test('Deep Dive distinguishes unavailable explanations from genuinely neutral model signals',async()=>{
+  const b=await browser();
+  b.context.report={...deepDiveReport,habitat:{status:'unavailable',explanation_points:0,failed_explanations:81,strengths:[],constraints:[]},pressures:[]};
+  b.run('renderDeepDive(report)');
+  assert.match(b.get('deep-dive-insight-note').textContent,/unavailable|could not be calculated/i);
+  assert.doesNotMatch(textOf(b.get('deep-dive-strengths')),/no consistent positive/i);
+  assert.doesNotMatch(textOf(b.get('deep-dive-pressures')),/no consistent negative/i);
+  b.context.report.habitat={status:'available',explanation_points:81,failed_explanations:0,strengths:[],constraints:[]};
+  b.run('renderDeepDive(report)');
+  assert.match(textOf(b.get('deep-dive-strengths')),/no.*positive|neutral/i);
+});
+
+test('Recorded examples label the Deep Dive transition as a live analysis',async()=>{
+  const b=await browser();
+  b.context.assessment={...complete.result,region:'MA',recorded_at:'2026-10-10T00:00:00Z'};
+  b.run('showResult(assessment)');
+  b.context.fetch=async()=>response({id:'live-deep',status:'running'});
+  await b.get('deep-dive-launch').click();
+  assert.equal(b.get('deep-dive-demo-note').hidden,false);
+  assert.match(b.get('deep-dive-demo-note').textContent,/live.*local.*data/i);
+});
+
+test('Deep Dive JSON exports the landscape report instead of the original point assessment',async()=>{
+  const b=await browser();
+  b.context.assessment={...complete.result,region:'MA'};
+  b.run('showResult(assessment)');
+  b.context.report=deepDiveReport;
+  b.run('renderDeepDive(report)');
+  let exported;
+  b.context.Blob=function(parts){exported=JSON.parse(parts[0]);};
+  b.get('deep-dive-export').click();
+  assert.equal(exported.analysis_type,'deep_dive');
+  assert.equal(exported.radius_km,25);
+  assert.equal(exported.overview.evaluated_points,81);
+  assert.match(exported.note,/relative/i);
+});
+
+test('Failed cancellation resumes the current Deep Dive without accepting an old poll',async()=>{
+  const b=await browser();
+  let finishOldPoll;
+  b.context.fetch=path=>{
+    if(path.endsWith('/cancel')) return Promise.resolve({ok:false,status:503,json:async()=>({error:'Temporarily unavailable'})});
+    return new Promise(resolve=>{finishOldPoll=resolve;});
+  };
+  b.run("deepDiveJobId='deep-retry';setDeepDiveBusy(true)");
+  b.get('deep-dive-content').hidden=true;
+  const polling=b.run("pollDeepDive('deep-retry',deepDiveRevision)");
+  const oldFinish=finishOldPoll;
+  await b.get('deep-dive-cancel').click();
+  oldFinish(response({status:'complete',result:deepDiveReport}));
+  await polling;
+  assert.equal(b.run('deepDiveBusy'),true);
+  assert.equal(b.get('deep-dive-content').hidden,true);
+  assert.equal(b.get('deep-dive-cancel').disabled,false);
+  assert.match(b.get('deep-dive-error').textContent,/could not cancel/i);
+});
+
+test('The remaining example works after removing the redundant area-example control',async()=>{
+  const b=await browser({missingIds:['try-area-example']});
+  b.context.fetch=async()=>response({recorded_at:'2026-10-10T00:00:00Z',point:{...complete.result,region:'MA'}});
+  await b.get('try-example').click();
+  assert.equal(b.get('result').hidden,false);
+  assert.match(b.get('result-title').textContent,/Bobcat/);
+  b.run('setBusy(true)');
+  assert.equal(b.get('analyze').disabled,true);
+  b.run('setBusy(false)');
+  assert.equal(b.get('analyze').disabled,false);
+});
+
+test('A Deep Dive without usable samples never claims that scoring succeeded',async()=>{
+  const b=await browser();
+  b.context.report={...deepDiveReport,
+    overview:{evaluated_points:0,total_points:81,unavailable_points:81},
+    habitat:{status:'unavailable',explanation_points:0,failed_explanations:0,strengths:[],constraints:[]},
+    pressures:[],sectors:[],survey_priorities:[],distribution:[],points:[]};
+  b.run('renderDeepDive(report)');
+  assert.match(b.get('deep-dive-summary').textContent,/No locations could be evaluated/);
+  const explanations=b.get('deep-dive-insight-note').textContent+textOf(b.get('deep-dive-strengths'));
+  assert.doesNotMatch(explanations,/scores remain usable|scores were calculated/);
+  assert.match(explanations,/no.*scor|no.*evaluat/i);
+});
+
+test('Directional overview limits its leading-sector claim to sufficiently sampled directions',async()=>{
+  const b=await browser();
+  b.context.report={...deepDiveReport,
+    overview:{...deepDiveReport.overview,strongest_sector:{name:'South',mean_percentile:50,points:3}},
+    sectors:[{name:'North',mean_percentile:90,points:2},{name:'South',mean_percentile:50,points:3}]};
+  b.run('renderDeepDive(report)');
+  assert.match(b.get('deep-dive-summary').textContent,/at least three|3 or more/);
+  assert.doesNotMatch(b.get('deep-dive-summary').textContent,/lead this landscape/);
+});
+
+test('Evidence labels background counts accurately in both reports',async()=>{
+  const b=await browser();
+  b.context.report={...deepDiveReport,evidence:{presence_count:405,background_count:810}};
+  b.run('renderDeepDive(report);renderEvidence(report)');
+  for(const id of ['deep-dive-evidence-stats','evidence-stats']) {
+    assert.match(textOf(b.get(id)),/Background locations.*810/);
+    assert.doesNotMatch(textOf(b.get(id)),/Comparison locations/);
+  }
+});
+
+test('Printing fits the complete Deep Dive landscape and restores the map view afterward',async()=>{
+  const b=await browser();
+  b.context.calls=[];
+  b.context.reportBounds={north:43,south:42};
+  b.run(`
+    showSection('deep-dive');
+    deepDiveBounds=reportBounds;
+    deepDiveMap={
+      getCenter:()=>({lat:42.3,lng:-72.5}),getZoom:()=>13,
+      invalidateSize:()=>calls.push('resize'),
+      fitBounds:bounds=>calls.push(bounds),
+      setView:(center,zoom)=>calls.push([center.lat,center.lng,zoom]),
+    };
+    preparePrintMaps();
+  `);
+  assert.equal(b.context.calls[0],'resize');
+  assert.equal(b.context.calls[1],b.context.reportBounds);
+  b.run('restorePrintMaps()');
+  assert.deepEqual(Array.from(b.context.calls.at(-1)),[42.3,-72.5,13]);
+});
+
+test('Print waits for map tiles before opening the dialog and releases the button afterward',async()=>{
+  const b=await browser();
+  b.context.report=deepDiveReport;
+  b.context.printed=0;
+  b.context.tileLoads=[];
+  b.run(`
+    showSection('deep-dive');renderDeepDive(report);
+    window.print=()=>printed++;
+    deepDiveMap={getCenter:()=>({lat:42.3,lng:-72.5}),getZoom:()=>10,
+      invalidateSize(){},fitBounds(){},setView(){},
+      eachLayer:callback=>callback({isLoading:()=>true,once:(event,done)=>tileLoads.push(done),off(){}}),
+    };
+  `);
+  const printing=b.get('deep-dive-print').click();
+  assert.equal(b.context.printed,0,'The dialog must wait while map tiles are loading');
+  assert.equal(b.get('deep-dive-print').disabled,true);
+  b.context.tileLoads[0]();
+  await printing;
+  assert.equal(b.context.printed,1);
+  assert.equal(b.get('deep-dive-print').disabled,false);
+});
+
+test('Technical validation scores have expandable explanations instead of leading the report',async()=>{
+  const b=await browser();
+  b.context.report={...deepDiveReport,evidence:{presence_count:405,background_count:810,folds:5,spatial_block_km:10,
+    roc_auc:.82,pr_auc:.71,pr_reference:1/3,sources:['iNaturalist observations']}};
+  b.run('renderDeepDive(report)');
+  const stats=b.get('deep-dive-evidence-stats');
+  const visible=stats.children.filter(child=>child.tagName!=='DETAILS').map(textOf).join(' ');
+  assert.doesNotMatch(visible,/ROC-AUC|PR-AUC/);
+  const help=stats.children.find(child=>child.tagName==='DETAILS');
+  assert.ok(help,'Validation scores must be available in expandable help');
+  assert.match(textOf(help),/What is ROC-AUC/);
+  assert.match(textOf(help),/0\.820/);
+  assert.match(textOf(help),/background/i);
 });

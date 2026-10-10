@@ -22,6 +22,15 @@ Browser app:
 wildlocate web
 ```
 
+If the command is not found, run it directly from the project folder:
+
+```bash
+./.venv/bin/wildlocate web --port 8766
+```
+
+Keep the terminal open while using the app. If that port is already in use,
+open `http://127.0.0.1:8766`, or select another port with `--port`.
+
 Desktop app:
 
 ```bash
@@ -51,12 +60,35 @@ Florida and Arizona use cached national raster tiles that download as needed.
 A completed habitat assessment can open a separate Deep Dive for the same landscape. Point assessments use a 10 km area.
 
 Deep Dive resamples 81 locations and summarizes:
-- strongest modeled habitat;
-- habitat strengths and weaknesses;
-- model pressure signals;
-- the sample map.
+
+- usable sample coverage and missing data;
+- habitat percentiles, suitability distribution, and directional comparisons;
+- supporting and limiting conditions, with explanation coverage;
+- three ranked locations to check in the field, linked to the map;
+- specific mapped roads, building footprints, habitat areas, and terrain
+  locations with model comparisons, measurements, source links, and field checks;
+- training evidence, expandable model-check explanations, and data sources.
+
+Reports can be exported as JSON or printed/saved as PDF. Both maps support scrolling and trackpad pinch zoom. Point examples are recorded results; opening Deep Dive runs a fresh analysis with local data.
 
 These are model interpretations, not proof of ecological causation.
+
+Specific places use the existing local machine-learning model, without a paid
+AI service or API key. Deep Dive selects up to six 1 km search neighborhoods
+from the landscape samples, retrieves bounded OpenStreetMap geometry through
+Overpass, and evaluates up to six mapped candidates of each type plus three
+existing terrain samples. The shortlist shows up to three places of each type.
+It ranks the strongest relevant negative single-condition comparison at each
+location, without adding overlapping effects into a damage score.
+
+The model measures surrounding conditions, usually within 250 m or 1 km;
+it cannot establish that an individual structure caused ecological harm or
+predict what would happen if that structure were removed. Mapping and raster
+data may have different dates, and mapping coverage is incomplete. Failed
+online lookups preserve the report and can use cached Massachusetts road
+geometry and existing terrain samples, with missing building data clearly
+identified. A single map-response cache is capped at 3 MB and expires after
+24 hours; network time and response size are bounded.
 
 ## Architecture
 
@@ -70,6 +102,8 @@ wildlocate/
 │   ├── modeling.py        # dataset construction, CV, training sessions
 │   ├── predict.py         # point/area prediction + request validation
 │   ├── registry.py        # accounts + bundled/custom model registry
+│   ├── mapped_places.py   # bounded OSM geometry + local MassDOT fallback
+│   ├── place_analysis.py  # actual-place model comparisons and field priorities
 │   └── worker.py          # isolated prediction/training subprocesses
 ├── gui/
 │   ├── app.py             # complete PyQt desktop interface

@@ -77,21 +77,30 @@ def load_comparison_scores(model, predictor_names, species, record=None):
         )
 
     comparison_df = pd.read_csv(comparison_file)
-    if predictor_names[0] not in comparison_df.columns:
+    if not predictor_names:
+        raise ValueError("Comparison scoring requires predictor names.")
+    missing = [name for name in predictor_names if name not in comparison_df.columns]
+    if missing:
         raise ValueError(
-            f"Comparison dataset for {species} does not contain the expected predictor columns."
+            f"Comparison dataset for {species} is missing predictor columns: "
+            + ", ".join(missing)
         )
 
     compare_X = comparison_df[predictor_names]
-    scores = model.predict_proba(compare_X)[:, 1]
-    return np.asarray(scores, dtype=float), comparison_df
+    if compare_X.empty or not np.isfinite(compare_X.to_numpy(dtype=float)).all():
+        raise ValueError(f"Comparison dataset for {species} must contain nonempty, finite predictor values.")
+    predictions = np.asarray(model.predict_proba(compare_X), dtype=float)
+    if predictions.shape != (len(compare_X), 2) or not np.isfinite(predictions).all():
+        raise ValueError(f"Comparison predictions for {species} must contain finite binary suitability scores for every row.")
+    return predictions[:, 1], comparison_df
 
 
 def percentile_of_score(score, comparison_scores):
-    if comparison_scores.size == 0:
-        raise ValueError("Cannot compute percentile because the comparison dataset is empty.")
-
     score_array = np.asarray(comparison_scores, dtype=float)
+    if score_array.ndim != 1 or score_array.size == 0 or not np.isfinite(score_array).all():
+        raise ValueError("Cannot compute percentile without a nonempty, finite comparison score vector.")
+    if not math.isfinite(score):
+        raise ValueError("Cannot compute percentile for a non-finite suitability score.")
     below = float(np.mean(score_array < score))
     percentile = int(round(100 * below))
     return max(0, min(100, percentile))
@@ -200,7 +209,7 @@ def habitat_insights(model, frame, comparison, comparison_scores, score, *, incl
         value = float(model.predict_proba(candidate)[0, 1])
         if not np.isfinite(value):
             raise ValueError('Non-finite scenario prediction')
-        return value, int(round(100 * np.mean(comparison_scores < value)))
+        return value, percentile_of_score(value, comparison_scores)
 
     influences = []
     for name in frame.columns:
@@ -217,7 +226,7 @@ def habitat_insights(model, frame, comparison, comparison_scores, score, *, incl
 
     scenarios = []
     tested = 0
-    baseline_percentile = int(round(100 * np.mean(comparison_scores < score)))
+    baseline_percentile = percentile_of_score(score, comparison_scores)
     # Report every supported experiment, including neutral/negative outcomes.
     for kind in (('forest', 'impervious') if include_scenarios else ()):
         for fraction in (.1, .25, .5):
