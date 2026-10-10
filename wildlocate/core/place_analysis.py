@@ -205,6 +205,23 @@ def _field_checks(kind, terrain_sample=False):
             "Treat natural terrain as habitat context rather than evidence of damage"]
 
 
+def _possible_pathways(kind):
+    """Questions suggested by feature type, NOT observed or quantified effects."""
+    if kind == "road":
+        return [
+            "Potential movement barrier or wildlife-vehicle collision risk; requires field or traffic evidence",
+            "Possible nearby impervious surface and drainage changes; requires site verification",
+        ]
+    if kind == "building":
+        return [
+            "Potential habitat-cover replacement around the footprint; confirm current land cover",
+            "Possible runoff or lighting effects; not measured by the habitat model",
+        ]
+    return [
+        "Potential habitat connectivity or water/vegetation function; verify current conditions",
+    ]
+
+
 def analyze_places(points, latitude, longitude, radius_km, region, evaluate):
     """Score selected real places; preserve the landscape report on mapping failure."""
     center = {"latitude": latitude, "longitude": longitude}
@@ -241,7 +258,9 @@ def analyze_places(points, latitude, longitude, radius_km, region, evaluate):
     for candidate in candidates:
         site = {key: value for key, value in candidate.items() if not key.startswith("_")}
         site.update(signals=[], supporting_signals=[], strongest_signal_points=0.0,
-                    assessment_status="unavailable", terrain_sample=False, field_checks=_field_checks(candidate["kind"]))
+                    assessment_status="unavailable", terrain_sample=False,
+                    potential_pathways=_possible_pathways(candidate["kind"]),
+                    field_checks=_field_checks(candidate["kind"]))
         try:
             assessment = evaluate(candidate["latitude"], candidate["longitude"])
             _validate_assessment(assessment)
