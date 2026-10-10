@@ -13,18 +13,16 @@ MAX_CANDIDATES_PER_KIND = 6
 MAX_SITES_PER_KIND = 3
 MIN_EFFECT = .001  # 0.1 score points; smaller differences round into noise.
 METHOD = (
-    "The local habitat model checks conditions at each selected place, using "
-    "the same environmental data as the landscape report. Places are ranked "
-    "by their strongest relevant negative single-condition comparison, "
-    "rather than by adding overlapping effects."
+    "Roads, buildings and mapped habitat polygons are located using "
+    "OpenStreetMap or available local data. The species model evaluates environmental "
+    "conditions near each feature. Each comparison replaces one environmental "
+    "variable at a time with its reference value; correlated effects are not added."
 )
 LIMITATIONS = (
-    "These comparisons describe surrounding conditions, usually within 250 m "
-    "or 1 km, and cannot attribute damage to an individual road or building. "
-    "The shortlist covers selected mapped places rather than every structure "
-    "in the area; natural terrain limits are not evidence of human damage. "
-    "Mapping and environmental datasets can have different dates, and the "
-    "nearest road measured by the model may differ from the mapped road."
+    "Surrounding conditions are measured at approximately 250 m or 1 km scales. "
+    "Model associations cannot establish that an individual road or building "
+    "caused ecological damage or predict the effect of removing it. Search "
+    "coverage is partial; maps and environmental data can be incomplete or dated."
 )
 
 
@@ -96,7 +94,9 @@ def select_search_areas(points, latitude, longitude, radius_km):
                            for group in ((kind,) if kind else ("road", "building", "habitat")))]
         return max(effects, default=0)
 
-    areas = []
+    # Examine the chosen center first, not just locations selected by the model.
+    areas = [{"latitude": float(latitude), "longitude": float(longitude),
+              "radius_m": SEARCH_RADIUS_M}]
 
     def add_first(candidates):
         for p in candidates:
@@ -235,8 +235,7 @@ def analyze_places(points, latitude, longitude, radius_km, region, evaluate):
     features = mapping.get("features", [])
     report["mapped_features"] = len(features)
     candidates = _candidates(features, points, center, radius_km)
-    candidates += [p for p in _terrain_candidates(points)
-                   if _distance(p, center) <= radius_km * 1000 + .1]
+    # Only source-backed mapped places belong in this feature-focused report.
     report["candidate_features"] = len(candidates)
     sites = []
     for candidate in candidates:
