@@ -80,6 +80,22 @@ test('Specific place cards expose location, model comparison, measurements and f
   assert.match(links[0].rel,/noopener/);
 });
 
+test('Mapped neutral, supporting and unscored places remain visible',async()=>{
+  const b=await browser();
+  const locations=[
+    {...road,id:'supporting',signals:[],supporting_signals:[{feature:'distance_to_road_m',current:340,reference:60,effect:.04}],assessment_status:'available'},
+    {...road,id:'neutral',signals:[],supporting_signals:[],assessment_status:'available'},
+    {...road,id:'unscored',signals:[],supporting_signals:[],assessment_status:'unavailable',
+      assessment_note:'Raster data unavailable for this location'},
+  ];
+  setReport(b,{places:{...places,sites:locations}});
+  const cards=b.get('deep-dive-places-list').children;
+  assert.equal(cards.length,3);
+  assert.match(textOf(cards[0]),/supporting local condition/i);
+  assert.match(textOf(cards[1]),/no substantial model limitation/i);
+  assert.match(textOf(cards[2]),/assessment unavailable|Raster data unavailable/i);
+});
+
 test('External names stay plain text and unsafe source URLs never become links',async()=>{
   const b=await browser();
   setReport(b,{places:{...places,sites:[{...road,name:'<img src=x onerror=alert(1)>',source_url:'javascript:alert(1)'}],sources:[{name:'Unsafe',url:'data:text/html,test'}]}});
@@ -130,7 +146,7 @@ test('Malformed places are skipped without breaking the landscape report',async(
   setReport(b,{places:{...places,sites:[{...road,latitude:Infinity},{...road,latitude:42.37,longitude:400},{...road,id:'valid'}]}});
   assert.equal(b.get('deep-dive-places-list').children.length,1);
   setReport(b,{places:{...places,status:'no_signal',sites:[]}});
-  assert.match(b.get('deep-dive-places-summary').textContent,/no.*limiting|no.*negative/i);
+  assert.match(b.get('deep-dive-places-summary').textContent,/no.*mapped|no.*supported|incomplete/i);
   assert.doesNotMatch(b.get('deep-dive-places-summary').textContent,/no damage|safe/i);
 });
 
