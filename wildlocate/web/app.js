@@ -458,6 +458,8 @@ function showResult(data) {
   $('empty').hidden = true;
   $('result').hidden = false;
   $('result-kind').textContent = area ? 'SURROUNDING AREA' : 'YOUR LOCATION';
+  // New assessments always start with the concise result, not expanded details.
+  $('assessment-details').open = false;
   $('result-title').textContent = area
     ? `${data.species} · ${data.radius_km} km radius`
     : data.species;
@@ -471,7 +473,6 @@ function showResult(data) {
     const scored = (data.points || []).filter(p => p.status === 'ok' && Number.isFinite(p.percentile));
     metric(scored.length ? ordinal(scored.reduce((sum, p) => sum + p.percentile, 0) / scored.length) : '—', 'Mean relative percentile');
     metric(String(data.evaluated_points), 'Points scored');
-    metric(`${data.grid_spacing_km} km`, 'Grid spacing');
     if (data.unavailable_points) metric(String(data.unavailable_points), 'Unavailable');
     $('point-percentile').hidden = true;
   } else {
@@ -525,9 +526,9 @@ function showResult(data) {
   }
 
   $('deep-dive-cta-copy').textContent = area
-    ? `See habitat patterns and places to check within this ${data.radius_km} km area`
-    : 'See habitat patterns and places to check around this location';
-  if (data.recorded_at) $('deep-dive-cta-copy').textContent += ' with a fresh analysis using your local data';
+    ? `Investigate specific buildings, roads, and terrain in this ${data.radius_km} km region.`
+    : 'Your score is for one point. Deep Dive investigates buildings, roads, and terrain in the surrounding 10 km radius—not just this point.';
+  if (data.recorded_at) $('deep-dive-cta-copy').textContent += ' This runs a fresh analysis with your local data.';
   $('status').textContent = area
     ? 'Assessment complete — select a map point for details'
     : 'Assessment complete';
@@ -824,6 +825,16 @@ function drawDeepDiveMap(report) {
   }, 0);
 }
 
+function deepDiveScopeText(source, radius) {
+  if (source?.analysis_type === 'regional') {
+    return `Regional analysis · Deep Dive examines specific places within your original ${radius} km radius.`;
+  }
+  if (source) {
+    return `Started from one point · Deep Dive examines the surrounding ${radius} km radius, not just that coordinate. Locations in the region are sampled and mapped features are investigated individually.`;
+  }
+  return `Deep Dive examines a ${radius} km radius around the selected coordinate rather than a single point.`;
+}
+
 function renderDeepDive(report) {
   deepDiveResult = report;
   $('deep-dive-loading').hidden = true;
@@ -834,6 +845,7 @@ function renderDeepDive(report) {
   $('deep-dive-content').hidden = false;
   $('deep-dive-title').textContent = `${report.species} · specific places`;
   $('deep-dive-meta').textContent = `${report.radius_km} km radius · ${report.model} · ${coords(report.latitude, report.longitude)}`;
+  $('deep-dive-scope-note').textContent = deepDiveScopeText(deepDiveSource, report.radius_km);
 
   const overview = report.overview || {};
   const evaluated = overview.evaluated_points ?? 0;
@@ -1168,7 +1180,8 @@ async function startDeepDive() {
   $('deep-dive-retry').hidden = true;
   $('deep-dive-title').textContent = `${result.species} · specific places`;
   $('deep-dive-meta').textContent =
-    `${radius} km · ${result.analysis_type === 'regional' ? 'regional' : 'point'} analysis`;
+    `${radius} km region · ${result.analysis_type === 'regional' ? 'area' : 'point'} origin`;
+  $('deep-dive-scope-note').textContent = deepDiveScopeText(result, radius);
   $('deep-dive-summary').textContent = 'Checking habitat across this area';
   $('deep-dive-demo-note').hidden = !result.recorded_at;
   $('deep-dive-demo-note').textContent = result.recorded_at
