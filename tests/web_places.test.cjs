@@ -62,6 +62,29 @@ function setReport(b,value) {
   b.run('renderDeepDive(report)');
 }
 
+test('Deep Dive map initializes and previews at a non-Amherst location',async()=>{
+  const b=await browser();
+  const centers=[], circles=[], fitted=[];
+  const view={setView(center){centers.push(center);return this;},invalidateSize(){return this;},
+    fitBounds(bounds){fitted.push(bounds);return this;}};
+  const layer={addTo(){return this;},clearLayers(){return this;}};
+  b.context.L={
+    map:()=>view,layerGroup:()=>layer,
+    tileLayer:()=>({on(){return this;},addTo(){return this;}}),
+    circle:(center,opts)=>{circles.push({center,opts});return {
+      addTo(){return this;},getBounds(){return {center};},
+    };},
+  };
+  b.context.window.L=b.context.L;
+  b.context.target={latitude:28.1,longitude:-81.6,radius_km:25};
+  b.run('result=target;initDeepDiveMap();previewDeepDiveArea(target)');
+  assert.equal(centers[0][0],28.1);
+  assert.equal(centers[0][1],-81.6);
+  assert.equal(circles[0].opts.radius,25000);
+  assert.equal(fitted.length,1);
+  assert.equal(b.get('deep-dive-places-map-key').hidden,true);
+});
+
 test('Specific place cards expose location, model comparison, measurements and field checks',async()=>{
   const b=await browser();
   setReport(b,{places});
