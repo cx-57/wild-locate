@@ -53,15 +53,17 @@ class PlaceAnalysisTests(unittest.TestCase):
         report = self.analyze([feature("road", "road"), feature("building", "building", 42.01)],
             lambda lat, lon: point(lat, lon, [influence("forest_fraction_250m", -.2),
                 influence("mean_slope_250m", -.1), influence("distance_to_road_m", .05)]))
-        self.assertEqual(report["status"], "no_signal")
-        self.assertEqual(report["sites"], [])
+        self.assertEqual(report["status"], "available")
+        self.assertEqual(len(report["sites"]), 2)
+        self.assertTrue(all(not site["signals"] for site in report["sites"]))
         self.assertEqual(report["assessed_features"], 2)
 
     def test_neutral_and_rounding_noise_do_not_create_a_priority(self):
         report = self.analyze([feature("building", "building")],
             lambda lat, lon: point(lat, lon, [influence("mean_impervious_250m", -1e-9)]))
-        self.assertEqual(report["status"], "no_signal")
-        self.assertEqual(report["sites"], [])
+        self.assertEqual(report["status"], "available")
+        self.assertEqual(len(report["sites"]), 1)
+        self.assertEqual(report["sites"][0]["signals"], [])
 
     def test_partial_evaluation_failure_keeps_good_sites_and_honest_counts(self):
         def evaluate(lat, lon):
@@ -73,7 +75,8 @@ class PlaceAnalysisTests(unittest.TestCase):
         self.assertEqual(report["status"], "partial")
         self.assertEqual(report["assessed_features"], 1)
         self.assertEqual(report["failed_evaluations"], 1)
-        self.assertEqual(len(report["sites"]), 1)
+        self.assertEqual(len(report["sites"]), 2)
+        self.assertEqual({site["assessment_status"] for site in report["sites"]}, {"available", "unavailable"})
 
     def test_nonfinite_scores_and_explanations_are_not_valid_assessments(self):
         for result in (dict(point(), score=float("nan")),
@@ -81,18 +84,18 @@ class PlaceAnalysisTests(unittest.TestCase):
                        point(influences=[influence("mean_impervious_250m", float("nan"))])):
             with self.subTest(result=result):
                 report = self.analyze([feature("building", "building")], lambda lat, lon: result)
-                self.assertEqual(report["sites"], [])
+                self.assertEqual(len(report["sites"]), 1)
+                self.assertEqual(report["sites"][0]["assessment_status"], "unavailable")
                 self.assertEqual(report["failed_evaluations"], 1)
                 json.dumps(report, allow_nan=False)
 
-    def test_offline_terrain_is_a_natural_condition_and_not_structural_damage(self):
+    def test_offline_mapping_does_not_invent_named_terrain_sites(self):
         terrain = point(influences=[influence("mean_slope_250m", -.04, 18, 4)])
         with patch.object(place_analysis, "discover_places", side_effect=ConnectionError("offline")):
             report = place_analysis.analyze_places([terrain], 42, -72, 10, "MA",
-                lambda lat, lon: self.fail("Existing terrain sample should not be recomputed"))
-        self.assertEqual(report["status"], "partial")
-        self.assertEqual(report["sites"][0]["kind"], "habitat")
-        self.assertIn("natural", " ".join(report["sites"][0]["field_checks"]).lower())
+                lambda lat, lon: self.fail("No unmapped synthetic site should be scored"))
+        self.assertEqual(report["status"], "unavailable")
+        self.assertEqual(report["sites"], [])
         self.assertIn("unavailable", " ".join(report["warnings"]).lower())
 
     def test_missing_mapping_does_not_claim_no_buildings_exist(self):
@@ -115,6 +118,18 @@ class PlaceAnalysisTests(unittest.TestCase):
         self.assertLessEqual(len(report["sites"]), 3)
         self.assertFalse(any(lat == 44 for lat, lon in calls))
 
+    def test_center_always_included_even_without_valid_samples(self):
+        areas = place_analysis.select_search_areas(
+            [{"latitude": 42, "longitude": -72, "status": "unavailable"}], 42, -72, 10)
+        self.assertEqual(areas, [{"latitude": 42.0, "longitude": -72.0, "radius_m": 1000}])
+
+    def test_supporting_factors_do_not_disappear_from_specific_places(self):
+        report = self.analyze([feature("road", "road")], lambda lat, lon:
+            point(lat, lon, [influence("distance_to_road_m", .04, 300, 40)]))
+        self.assertEqual(len(report["sites"]), 1)
+        self.assertEqual(report["sites"][0]["signals"], [])
+        self.assertEqual(report["sites"][0]["supporting_signals"][0]["effect"], .04)
+
     def test_search_neighborhoods_are_separated_bounded_and_inside_the_radius(self):
         points = [point(42 + i * .004, influences=[influence("mean_impervious_250m", -.1)])
                   for i in range(30)] + [point(44)]
@@ -133,13 +148,16 @@ class PlaceAnalysisTests(unittest.TestCase):
         self.assertIn((42, -72), locations)
         self.assertIn((42.018, -72), locations)
 
-    def test_no_usable_habitat_data_skips_mapping(self):
-        with patch.object(place_analysis, "discover_places") as discover:
+    def test_no_usable_habitat_samples_still_searches_requested_center(self):
+        mapping = {"status": "available", "features": [feature("road", "road")],
+                   "sources": [], "warnings": []}
+        with patch.object(place_analysis, "discover_places", return_value=mapping) as discover:
             report = place_analysis.analyze_places([
                 {"latitude": 42, "longitude": -72, "status": "unavailable"}],
-                42, -72, 10, "MA", lambda lat, lon: point())
-        discover.assert_not_called()
-        self.assertEqual(report["status"], "unavailable")
+                42, -72, 10, "MA", lambda lat, lon: point(lat, lon))
+        discover.assert_called_once()
+        self.assertEqual(discover.call_args.args[0][0]["latitude"], 42)
+        self.assertEqual(report["sites"][0]["id"], "road")
 
     def test_malformed_mapping_keeps_an_unavailable_report(self):
         for mapping in (None, {"features": None}):
@@ -158,7 +176,8 @@ class PlaceAnalysisTests(unittest.TestCase):
     def test_unavailable_assessments_with_stale_numbers_are_excluded(self):
         report = self.analyze([feature("building", "building")],
             lambda lat, lon: dict(point(influences=[influence("mean_impervious_250m", -.1)]), status="unavailable"))
-        self.assertEqual(report["sites"], [])
+        self.assertEqual(len(report["sites"]), 1)
+        self.assertEqual(report["sites"][0]["assessment_status"], "unavailable")
         self.assertEqual(report["failed_evaluations"], 1)
 
     def test_mapped_wetland_checks_do_not_assume_a_terrain_slope(self):
