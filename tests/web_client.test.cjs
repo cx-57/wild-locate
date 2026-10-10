@@ -81,6 +81,14 @@ async function browser({missingIds=[]}={}) {
   return {context,get,run:code=>vm.runInContext(code,context)};
 }
 
+test('The browser loads every feature script in dependency order',()=>{
+  const html=fs.readFileSync('wildlocate/web/index.html','utf8');
+  const names=[...html.matchAll(/<script defer src="\/([^"]+\.js)"><\/script>/g)]
+    .map(match=>match[1]).filter(name=>name!=='vendor/leaflet.js');
+  assert.deepEqual(names,['app.js','habitat.js','deep-dive.js','report.js','species.js']);
+  for(const name of names) assert.ok(fs.existsSync('wildlocate/web/'+name));
+});
+
 const complete={
   status:'complete',
   result:{
