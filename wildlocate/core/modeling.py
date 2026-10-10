@@ -305,21 +305,18 @@ def build_estimator(model_name):
 
 
 def build_models():
-    models = [
-        {"name": "LogisticRegression", "estimator": None},
-        {"name": "RandomForest", "estimator": None},
-    ]
-
+    models = ["LogisticRegression", "RandomForest"]
     try:
         from xgboost import XGBClassifier  # noqa: F401
-        models.append({"name": "XGBoost", "estimator": None})
+        models.append("XGBoost")
     except Exception:
         print("XGBoost not available; skipping XGBoost model.")
-
     return models
 
 
 def select_spatial_splits(df, feature_columns, y):
+    # Start with the intended 10 km blocks. Larger blocks are only fallbacks
+    # when a fold would otherwise contain a single target class.
     candidate_block_sizes = [10000, 15000, 20000, 25000, 30000, 40000, 50000]
     last_error = None
 
@@ -376,11 +373,9 @@ def evaluate_models(df, feature_columns, splits, progress=None):
     X = df[feature_columns]
     y = df[TARGET_COLUMN].astype(int)
 
-    model_specs = build_models()
     model_results = []
 
-    for model_info in model_specs:
-        model_name = model_info["name"]
+    for model_name in build_models():
         fold_metrics = []
         fold_roc_values = []
         fold_pr_values = []
@@ -441,7 +436,9 @@ def evaluate_models(df, feature_columns, splits, progress=None):
 
 
 def pick_best_model(model_results):
-    sorted_results = sorted(
+    # PR-AUC matters most for the imbalanced presence/background problem;
+    # ROC-AUC and lower model complexity break close ties.
+    return min(
         model_results,
         key=lambda item: (
             -item["mean_pr_auc"],
@@ -449,7 +446,6 @@ def pick_best_model(model_results):
             MODEL_COMPLEXITY.get(item["model"], 99),
         ),
     )
-    return sorted_results[0]
 
 
 def top_features_for_model(model_name, fitted_pipeline, feature_columns, top_n=5):
