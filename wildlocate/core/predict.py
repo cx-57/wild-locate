@@ -14,6 +14,8 @@ from wildlocate.core.registry import available_species, resolve_model
 from wildlocate.core.regional import get_region
 
 def format_model_name(model_name):
+    if model_name == "LogisticRegression":
+        return "Logistic Regression"
     if model_name == "RandomForest":
         return "Random Forest"
     return model_name
@@ -31,6 +33,9 @@ def load_model_and_metadata(species, record=None):
         )
 
     model = joblib.load(model_path)
+    for name in model.get_params():
+        if name.endswith("n_jobs"):
+            model.set_params(**{name: 1})
     metrics = json.loads(metrics_path.read_text())
     return model, metrics
 
@@ -38,9 +43,9 @@ def load_model_and_metadata(species, record=None):
 def validate_lat_lon(latitude, longitude):
     if latitude is None or longitude is None:
         raise ValueError("Latitude and longitude are required.")
-    if not (-90 <= latitude <= 90):
+    if not math.isfinite(latitude) or not (-90 <= latitude <= 90):
         raise ValueError(f"Invalid latitude {latitude}. Latitude must be between -90 and 90.")
-    if not (-180 <= longitude <= 180):
+    if not math.isfinite(longitude) or not (-180 <= longitude <= 180):
         raise ValueError(f"Invalid longitude {longitude}. Longitude must be between -180 and 180.")
 
 
@@ -104,6 +109,24 @@ def category_for_percentile(percentile):
     return "Very High"
 
 
+def model_evidence(metrics, region="MA"):
+    selected = next((m for m in metrics.get("metrics_by_model", [])
+                     if m.get("model") == metrics.get("selected_model")), {})
+    presence, background = int(metrics.get("presence_count", 0)), int(metrics.get("background_count", 0))
+    total = presence + background
+    return {
+        "region": region, "presence_count": presence, "background_count": background,
+        "folds": metrics.get("number_of_folds"),
+        "spatial_block_km": metrics.get("spatial_block_size_m", 0) / 1000,
+        "roc_auc": selected.get("mean_roc_auc"), "pr_auc": selected.get("mean_pr_auc"),
+        "pr_auc_sd": selected.get("std_pr_auc"),
+        "pr_reference": presence / total if total else None,
+        "sources": ["iNaturalist research-grade observations", "USGS NLCD land cover and impervious surface", "USGS 3DEP terrain"]
+                   + (["MassDEP hydrography", "MassDOT roads"] if region == "MA" else []),
+        "interpretation": "Spatial validation against sampled background, not presence probability. Percentiles rank the model's fitted comparison locations.",
+    }
+
+
 def predict_species(species, latitude, longitude, region="MA", *, username=None):
     region = get_region(region).code
     species = species.strip()
@@ -156,6 +179,7 @@ def predict_species(species, latitude, longitude, region="MA", *, username=None)
         insights = {"error": "Insights could not be calculated for this model. Your assessment is still available."}
 
     return {
+        "evidence": model_evidence(metrics, region),
         "region": region,
         "insights": insights,
         "species": species,
@@ -171,7 +195,7 @@ def predict_species(species, latitude, longitude, region="MA", *, username=None)
 
 
 
-def habitat_insights(model, frame, comparison, comparison_scores, score):
+def habitat_insights(model, frame, comparison, comparison_scores, score, *, include_scenarios=True):
     def evaluate(candidate):
         value = float(model.predict_proba(candidate)[0, 1])
         if not np.isfinite(value):
@@ -194,10 +218,8 @@ def habitat_insights(model, frame, comparison, comparison_scores, score):
     scenarios = []
     tested = 0
     baseline_percentile = int(round(100 * np.mean(comparison_scores < score)))
-    # Search a small, explicit grid; retain the strongest visible gain per
-    # scenario type. These are model experiments, not an intervention optimizer.
-    for kind in ('forest', 'impervious'):
-        best = None
+    # Report every supported experiment, including neutral/negative outcomes.
+    for kind in (('forest', 'impervious') if include_scenarios else ()):
         for fraction in (.1, .25, .5):
             candidate = frame.copy()
             changes = []
@@ -206,8 +228,8 @@ def habitat_insights(model, frame, comparison, comparison_scores, score):
                     source, target = f'developed_fraction_{radius}', f'forest_fraction_{radius}'
                     if source not in frame or target not in frame:
                         continue
-                    amount = min(float(frame.iloc[0][source]) * fraction,
-                                 1 - float(frame.iloc[0][target]))
+                    amount = max(0, min(float(frame.iloc[0][source]) * fraction,
+                                        1 - float(frame.iloc[0][target])))
                     updates = {source: float(frame.iloc[0][source]) - amount,
                                target: float(frame.iloc[0][target]) + amount}
                 else:
@@ -225,16 +247,15 @@ def habitat_insights(model, frame, comparison, comparison_scores, score):
             tested += 1
             value, percentile = evaluate(candidate)
             delta = value - score
-            if delta < .001 or (best is not None and delta <= best['delta'] + 1e-10):
-                continue
             percent = int(fraction * 100)
             title = (f'Replace {percent}% of developed cover with forest' if kind == 'forest'
                      else f'Reduce impervious surface by {percent}%')
-            best = {'title': title, 'score': value, 'delta': delta,
-                    'percentile': percentile, 'changes': changes}
-        if best is not None:
-            scenarios.append(best)
-    scenarios.sort(key=lambda item: item['delta'], reverse=True)
+            outside = [c['feature'] for c in changes
+                       if c['after'] < float(comparison[c['feature']].min())
+                       or c['after'] > float(comparison[c['feature']].max())]
+            scenarios.append({'kind': kind, 'fraction': fraction, 'title': title,
+                              'score': value, 'delta': delta, 'percentile': percentile,
+                              'changes': changes, 'outside_training_range': outside})
     return {'influences': influences, 'scenarios': scenarios,
             'baseline_score': float(score), 'baseline_percentile': baseline_percentile,
             'scenarios_tested': tested}
@@ -294,6 +315,7 @@ def predict_area(species, latitude, longitude, radius_km, region='MA', *, userna
         point.update(status='ok', score=score, percentile=percentile, category=category_for_percentile(percentile))
     scored = [p for p in points if p['status'] == 'ok']
     return {
+        'evidence': model_evidence(metrics, region),
         'analysis_type': 'regional', 'species': record.species, 'region': region,
         'latitude': latitude, 'longitude': longitude, 'radius_km': radius_km,
         'grid_spacing_km': radius_km / 5, 'points': points,

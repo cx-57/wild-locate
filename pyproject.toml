@@ -35,4 +35,4 @@ namespaces = false
 "wildlocate" = ["bundled/*"]
 "wildlocate.core" = ["state_boundaries.geojson"]
 "wildlocate.gui" = ["map.html", "leaflet.css", "leaflet.js"]
-"wildlocate.web" = ["*.html", "*.css", "*.js"]
+"wildlocate.web" = ["*.html", "*.css", "*.js", "demo.json"]

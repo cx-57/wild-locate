@@ -1623,7 +1623,7 @@ class MainWindow(QMainWindow):
             self.input_note.setText("Experimental regional models · first analysis may download environmental tiles.")
 
     def use_example(self):
-        lat, lon = (42.28, -71.35) if self.species.currentText() == "Red Fox" else (42.3718, -72.2820)
+        lat, lon = (42.28, -71.35) if self.species.currentText() == "Red Fox" else get_region("MA").center
         if self.region != "MA":
             lat, lon = get_region(self.region).center
         self.latitude.setText(f"{lat:.4f}")

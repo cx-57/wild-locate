@@ -1,0 +1,1043 @@
+{
+  "recorded_at": "2026-10-10T03:24:14+00:00",
+  "description": "Recorded model assessment around Amherst, Massachusetts. Hypothetical changes are model experiments, not ecological forecasts.",
+  "runtime": {
+    "scikit-learn": "1.9.1",
+    "xgboost": "3.4.1",
+    "rasterio": "1.5.1",
+    "geopandas": "1.1.4"
+  },
+  "point": {
+    "evidence": {
+      "region": "MA",
+      "presence_count": 478,
+      "background_count": 1434,
+      "folds": 5,
+      "spatial_block_km": 10.0,
+      "roc_auc": 0.7832284888144263,
+      "pr_auc": 0.5047599150760992,
+      "pr_auc_sd": 0.054535227357670454,
+      "pr_reference": 0.25,
+      "sources": [
+        "iNaturalist research-grade observations",
+        "USGS NLCD land cover and impervious surface",
+        "USGS 3DEP terrain",
+        "MassDEP hydrography",
+        "MassDOT roads"
+      ],
+      "interpretation": "Spatial validation against sampled background, not presence probability. Percentiles rank the model's fitted comparison locations."
+    },
+    "region": "MA",
+    "insights": {
+      "influences": [
+        {
+          "feature": "mean_impervious_250m",
+          "current": 35.57013574660633,
+          "reference": 6.923076923076923,
+          "effect": -0.18765079365079362
+        },
+        {
+          "feature": "forest_fraction_250m",
+          "current": 0.0,
+          "reference": 0.2285067873303167,
+          "effect": -0.13474999999999998
+        },
+        {
+          "feature": "mean_impervious_1000m",
+          "current": 25.142938659058487,
+          "reference": 8.572753209700428,
+          "effect": -0.1088888888888889
+        },
+        {
+          "feature": "developed_fraction_250m",
+          "current": 1.0,
+          "reference": 0.3257918552036199,
+          "effect": -0.06144444444444444
+        },
+        {
+          "feature": "distance_to_road_m",
+          "current": 0.3489825390945045,
+          "reference": 50.98843330629352,
+          "effect": -0.0557777777777778
+        },
+        {
+          "feature": "distance_to_water_m",
+          "current": 596.5243493520536,
+          "reference": 103.53473934391663,
+          "effect": -0.042166666666666686
+        },
+        {
+          "feature": "elevation_m",
+          "current": 96.02509307861328,
+          "reference": 41.34208679199219,
+          "effect": -0.02942857142857143
+        },
+        {
+          "feature": "developed_fraction_1000m",
+          "current": 0.8793152639087018,
+          "reference": 0.3549215406562054,
+          "effect": -0.02050000000000001
+        },
+        {
+          "feature": "forest_fraction_1000m",
+          "current": 0.08730385164051355,
+          "reference": 0.2671897289586305,
+          "effect": -0.014555555555555558
+        },
+        {
+          "feature": "wetland_fraction_250m",
+          "current": 0.0,
+          "reference": 0.0542986425339366,
+          "effect": -0.008222222222222221
+        },
+        {
+          "feature": "terrain_ruggedness_1000m",
+          "current": 12.46730920751166,
+          "reference": 8.698704883869432,
+          "effect": -0.006666666666666668
+        },
+        {
+          "feature": "wetland_fraction_1000m",
+          "current": 0.03281027104136947,
+          "reference": 0.1004279600570613,
+          "effect": -0.002777777777777782
+        },
+        {
+          "feature": "open_water_fraction_1000m",
+          "current": 0.0,
+          "reference": 0.009700427960057,
+          "effect": -0.0013888888888888978
+        },
+        {
+          "feature": "mean_slope_1000m",
+          "current": 2.3081451550654744,
+          "reference": 1.5344902398523295,
+          "effect": 0.0013333333333333253
+        },
+        {
+          "feature": "open_water_fraction_250m",
+          "current": 0.0,
+          "reference": 0.0,
+          "effect": 0.0
+        },
+        {
+          "feature": "mean_slope_250m",
+          "current": 1.3969683687535164,
+          "reference": 1.3850856681081958,
+          "effect": 0.0
+        }
+      ],
+      "scenarios": [
+        {
+          "kind": "forest",
+          "fraction": 0.1,
+          "title": "Replace 10% of developed cover with forest",
+          "score": 0.05172222222222222,
+          "delta": 0.010444444444444444,
+          "percentile": 16,
+          "changes": [
+            {
+              "feature": "developed_fraction_250m",
+              "before": 1.0,
+              "after": 0.9
+            },
+            {
+              "feature": "forest_fraction_250m",
+              "before": 0.0,
+              "after": 0.1
+            },
+            {
+              "feature": "developed_fraction_1000m",
+              "before": 0.8793152639087018,
+              "after": 0.7913837375178316
+            },
+            {
+              "feature": "forest_fraction_1000m",
+              "before": 0.08730385164051355,
+              "after": 0.17523537803138373
+            }
+          ],
+          "outside_training_range": []
+        },
+        {
+          "kind": "forest",
+          "fraction": 0.25,
+          "title": "Replace 25% of developed cover with forest",
+          "score": 0.1766111111111111,
+          "delta": 0.13533333333333333,
+          "percentile": 48,
+          "changes": [
+            {
+              "feature": "developed_fraction_250m",
+              "before": 1.0,
+              "after": 0.75
+            },
+            {
+              "feature": "forest_fraction_250m",
+              "before": 0.0,
+              "after": 0.25
+            },
+            {
+              "feature": "developed_fraction_1000m",
+              "before": 0.8793152639087018,
+              "after": 0.6594864479315263
+            },
+            {
+              "feature": "forest_fraction_1000m",
+              "before": 0.08730385164051355,
+              "after": 0.307132667617689
+            }
+          ],
+          "outside_training_range": []
+        },
+        {
+          "kind": "forest",
+          "fraction": 0.5,
+          "title": "Replace 50% of developed cover with forest",
+          "score": 0.2217936507936508,
+          "delta": 0.18051587301587302,
+          "percentile": 56,
+          "changes": [
+            {
+              "feature": "developed_fraction_250m",
+              "before": 1.0,
+              "after": 0.5
+            },
+            {
+              "feature": "forest_fraction_250m",
+              "before": 0.0,
+              "after": 0.5
+            },
+            {
+              "feature": "developed_fraction_1000m",
+              "before": 0.8793152639087018,
+              "after": 0.4396576319543509
+            },
+            {
+              "feature": "forest_fraction_1000m",
+              "before": 0.08730385164051355,
+              "after": 0.5269614835948645
+            }
+          ],
+          "outside_training_range": []
+        },
+        {
+          "kind": "impervious",
+          "fraction": 0.1,
+          "title": "Reduce impervious surface by 10%",
+          "score": 0.04694444444444445,
+          "delta": 0.005666666666666674,
+          "percentile": 15,
+          "changes": [
+            {
+              "feature": "mean_impervious_250m",
+              "before": 35.57013574660633,
+              "after": 32.0131221719457
+            },
+            {
+              "feature": "mean_impervious_1000m",
+              "before": 25.142938659058487,
+              "after": 22.628644793152638
+            }
+          ],
+          "outside_training_range": []
+        },
+        {
+          "kind": "impervious",
+          "fraction": 0.25,
+          "title": "Reduce impervious surface by 25%",
+          "score": 0.12033333333333333,
+          "delta": 0.07905555555555556,
+          "percentile": 35,
+          "changes": [
+            {
+              "feature": "mean_impervious_250m",
+              "before": 35.57013574660633,
+              "after": 26.67760180995475
+            },
+            {
+              "feature": "mean_impervious_1000m",
+              "before": 25.142938659058487,
+              "after": 18.857203994293865
+            }
+          ],
+          "outside_training_range": []
+        },
+        {
+          "kind": "impervious",
+          "fraction": 0.5,
+          "title": "Reduce impervious surface by 50%",
+          "score": 0.3609801587301589,
+          "delta": 0.3197023809523811,
+          "percentile": 70,
+          "changes": [
+            {
+              "feature": "mean_impervious_250m",
+              "before": 35.57013574660633,
+              "after": 17.785067873303166
+            },
+            {
+              "feature": "mean_impervious_1000m",
+              "before": 25.142938659058487,
+              "after": 12.571469329529243
+            }
+          ],
+          "outside_training_range": []
+        }
+      ],
+      "baseline_score": 0.041277777777777774,
+      "baseline_percentile": 13,
+      "scenarios_tested": 6,
+      "species": "Fisher",
+      "top_features": [
+        {
+          "feature": "elevation_m",
+          "importance": 0.11779116691272638
+        },
+        {
+          "feature": "forest_fraction_250m",
+          "importance": 0.1145909084410324
+        },
+        {
+          "feature": "distance_to_road_m",
+          "importance": 0.09726449170939055
+        },
+        {
+          "feature": "forest_fraction_1000m",
+          "importance": 0.07300735605125364
+        },
+        {
+          "feature": "mean_impervious_250m",
+          "importance": 0.07253718821510739
+        }
+      ],
+      "feature_values": {
+        "forest_fraction_250m": 0.0,
+        "forest_fraction_1000m": 0.08730385164051355,
+        "wetland_fraction_250m": 0.0,
+        "wetland_fraction_1000m": 0.03281027104136947,
+        "developed_fraction_250m": 1.0,
+        "developed_fraction_1000m": 0.8793152639087018,
+        "open_water_fraction_250m": 0.0,
+        "open_water_fraction_1000m": 0.0,
+        "mean_impervious_250m": 35.57013574660633,
+        "mean_impervious_1000m": 25.142938659058487,
+        "elevation_m": 96.02509307861328,
+        "mean_slope_250m": 1.3969683687535164,
+        "mean_slope_1000m": 2.3081451550654744,
+        "terrain_ruggedness_1000m": 12.46730920751166,
+        "distance_to_water_m": 596.5243493520536,
+        "distance_to_road_m": 0.3489825390945045
+      }
+    },
+    "species": "Fisher",
+    "latitude": 42.3732,
+    "longitude": -72.5199,
+    "score": 0.041277777777777774,
+    "percentile": 13,
+    "category": "Very Low",
+    "model": "Random Forest",
+    "training_observations": 478,
+    "features": {
+      "forest_fraction_250m": 0.0,
+      "forest_fraction_1000m": 0.08730385164051355,
+      "wetland_fraction_250m": 0.0,
+      "wetland_fraction_1000m": 0.03281027104136947,
+      "developed_fraction_250m": 1.0,
+      "developed_fraction_1000m": 0.8793152639087018,
+      "open_water_fraction_250m": 0.0,
+      "open_water_fraction_1000m": 0.0,
+      "mean_impervious_250m": 35.57013574660633,
+      "mean_impervious_1000m": 25.142938659058487,
+      "elevation_m": 96.02509307861328,
+      "mean_slope_250m": 1.3969683687535164,
+      "mean_slope_1000m": 2.3081451550654744,
+      "terrain_ruggedness_1000m": 12.46730920751166,
+      "distance_to_water_m": 596.5243493520536,
+      "distance_to_road_m": 0.3489825390945045
+    }
+  },
+  "area": {
+    "evidence": {
+      "region": "MA",
+      "presence_count": 478,
+      "background_count": 1434,
+      "folds": 5,
+      "spatial_block_km": 10.0,
+      "roc_auc": 0.7832284888144263,
+      "pr_auc": 0.5047599150760992,
+      "pr_auc_sd": 0.054535227357670454,
+      "pr_reference": 0.25,
+      "sources": [
+        "iNaturalist research-grade observations",
+        "USGS NLCD land cover and impervious surface",
+        "USGS 3DEP terrain",
+        "MassDEP hydrography",
+        "MassDOT roads"
+      ],
+      "interpretation": "Spatial validation against sampled background, not presence probability. Percentiles rank the model's fitted comparison locations."
+    },
+    "analysis_type": "regional",
+    "species": "Fisher",
+    "region": "MA",
+    "latitude": 42.3732,
+    "longitude": -72.5199,
+    "radius_km": 10,
+    "grid_spacing_km": 2.0,
+    "points": [
+      {
+        "latitude": 42.28317451770043,
+        "longitude": -72.5199,
+        "status": "ok",
+        "score": 0.553936507936508,
+        "percentile": 75,
+        "category": "High"
+      },
+      {
+        "latitude": 42.301156622315126,
+        "longitude": -72.5926634584728,
+        "status": "ok",
+        "score": 0.13538888888888892,
+        "percentile": 38,
+        "category": "Low"
+      },
+      {
+        "latitude": 42.301169458605074,
+        "longitude": -72.56840897888686,
+        "status": "ok",
+        "score": 0.0726904761904762,
+        "percentile": 22,
+        "category": "Low"
+      },
+      {
+        "latitude": 42.30117716038079,
+        "longitude": -72.54415449141493,
+        "status": "ok",
+        "score": 0.08263492063492064,
+        "percentile": 25,
+        "category": "Low"
+      },
+      {
+        "latitude": 42.301179727639656,
+        "longitude": -72.5199,
+        "status": "ok",
+        "score": 0.0761111111111111,
+        "percentile": 23,
+        "category": "Low"
+      },
+      {
+        "latitude": 42.30117716038079,
+        "longitude": -72.49564550858508,
+        "status": "ok",
+        "score": 0.15787566137566134,
+        "percentile": 44,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.301169458605074,
+        "longitude": -72.47139102111315,
+        "status": "ok",
+        "score": 0.17387301587301585,
+        "percentile": 48,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.301156622315126,
+        "longitude": -72.44713654152721,
+        "status": "ok",
+        "score": 0.23015873015873012,
+        "percentile": 58,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.319143788414536,
+        "longitude": -72.6169455910386,
+        "status": "ok",
+        "score": 0.1701640211640211,
+        "percentile": 47,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.319161766347115,
+        "longitude": -72.592684207096,
+        "status": "ok",
+        "score": 0.3467738095238093,
+        "percentile": 69,
+        "category": "High"
+      },
+      {
+        "latitude": 42.31917460773189,
+        "longitude": -72.56842281131023,
+        "status": "ok",
+        "score": 0.5224960317460315,
+        "percentile": 75,
+        "category": "High"
+      },
+      {
+        "latitude": 42.3191823125645,
+        "longitude": -72.54416140762898,
+        "status": "ok",
+        "score": 0.3626349206349206,
+        "percentile": 70,
+        "category": "High"
+      },
+      {
+        "latitude": 42.319184880842336,
+        "longitude": -72.5199,
+        "status": "ok",
+        "score": 0.39003571428571426,
+        "percentile": 71,
+        "category": "High"
+      },
+      {
+        "latitude": 42.3191823125645,
+        "longitude": -72.49563859237104,
+        "status": "ok",
+        "score": 0.42131481481481486,
+        "percentile": 72,
+        "category": "High"
+      },
+      {
+        "latitude": 42.31917460773189,
+        "longitude": -72.47137718868979,
+        "status": "ok",
+        "score": 0.36613492063492065,
+        "percentile": 70,
+        "category": "High"
+      },
+      {
+        "latitude": 42.319161766347115,
+        "longitude": -72.44711579290401,
+        "status": "ok",
+        "score": 0.33607010582010594,
+        "percentile": 68,
+        "category": "High"
+      },
+      {
+        "latitude": 42.319143788414536,
+        "longitude": -72.42285440896141,
+        "status": "ok",
+        "score": 0.1796587301587302,
+        "percentile": 49,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.33714886856217,
+        "longitude": -72.61697327799294,
+        "status": "ok",
+        "score": 0.19093518518518515,
+        "percentile": 52,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.33716685363272,
+        "longitude": -72.59270497232835,
+        "status": "ok",
+        "score": 0.14924603174603174,
+        "percentile": 42,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.33717970011606,
+        "longitude": -72.56843665480636,
+        "status": "ok",
+        "score": 0.27248412698412705,
+        "percentile": 63,
+        "category": "High"
+      },
+      {
+        "latitude": 42.3371874080078,
+        "longitude": -72.54416832937942,
+        "status": "ok",
+        "score": 0.28290873015873025,
+        "percentile": 64,
+        "category": "High"
+      },
+      {
+        "latitude": 42.33718997730534,
+        "longitude": -72.5199,
+        "status": "ok",
+        "score": 0.7195303030303029,
+        "percentile": 76,
+        "category": "High"
+      },
+      {
+        "latitude": 42.3371874080078,
+        "longitude": -72.4956316706206,
+        "status": "ok",
+        "score": 0.35547582972582975,
+        "percentile": 69,
+        "category": "High"
+      },
+      {
+        "latitude": 42.33717970011606,
+        "longitude": -72.47136334519365,
+        "status": "ok",
+        "score": 0.5661309523809525,
+        "percentile": 75,
+        "category": "High"
+      },
+      {
+        "latitude": 42.33716685363272,
+        "longitude": -72.44709502767166,
+        "status": "ok",
+        "score": 0.2985277777777779,
+        "percentile": 65,
+        "category": "High"
+      },
+      {
+        "latitude": 42.33714886856217,
+        "longitude": -72.42282672200707,
+        "status": "ok",
+        "score": 0.1287222222222222,
+        "percentile": 37,
+        "category": "Low"
+      },
+      {
+        "latitude": 42.355153891955084,
+        "longitude": -72.61700098711715,
+        "status": "ok",
+        "score": 0.17619047619047618,
+        "percentile": 48,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.35517188416884,
+        "longitude": -72.59272575418814,
+        "status": "ok",
+        "score": 0.3801111111111111,
+        "percentile": 71,
+        "category": "High"
+      },
+      {
+        "latitude": 42.35518473575447,
+        "longitude": -72.56845050938746,
+        "status": "ok",
+        "score": 0.31825396825396823,
+        "percentile": 67,
+        "category": "High"
+      },
+      {
+        "latitude": 42.35519244670759,
+        "longitude": -72.54417525667235,
+        "status": "ok",
+        "score": 0.4113862433862433,
+        "percentile": 72,
+        "category": "High"
+      },
+      {
+        "latitude": 42.35519501702559,
+        "longitude": -72.5199,
+        "status": "ok",
+        "score": 0.5329312169312169,
+        "percentile": 75,
+        "category": "High"
+      },
+      {
+        "latitude": 42.35519244670759,
+        "longitude": -72.49562474332767,
+        "status": "ok",
+        "score": 0.2671399711399711,
+        "percentile": 62,
+        "category": "High"
+      },
+      {
+        "latitude": 42.35518473575447,
+        "longitude": -72.47134949061255,
+        "status": "ok",
+        "score": 0.3516150793650793,
+        "percentile": 69,
+        "category": "High"
+      },
+      {
+        "latitude": 42.35517188416884,
+        "longitude": -72.44707424581188,
+        "status": "ok",
+        "score": 0.14956746031746035,
+        "percentile": 42,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.355153891955084,
+        "longitude": -72.42279901288286,
+        "status": "ok",
+        "score": 0.1585291005291005,
+        "percentile": 44,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.37313571656357,
+        "longitude": -72.6413108683298,
+        "status": "ok",
+        "score": 0.7941269841269841,
+        "percentile": 79,
+        "category": "High"
+      },
+      {
+        "latitude": 42.37315885859018,
+        "longitude": -72.61702871843568,
+        "status": "ok",
+        "score": 0.3525912698412698,
+        "percentile": 69,
+        "category": "High"
+      },
+      {
+        "latitude": 42.37317685795239,
+        "longitude": -72.59274655269367,
+        "status": "ok",
+        "score": 0.269611111111111,
+        "percentile": 63,
+        "category": "High"
+      },
+      {
+        "latitude": 42.37318971464405,
+        "longitude": -72.56846437506574,
+        "status": "ok",
+        "score": 0.21010317460317457,
+        "percentile": 55,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.3731974286608,
+        "longitude": -72.54418218951386,
+        "status": "ok",
+        "score": 0.38232539682539673,
+        "percentile": 71,
+        "category": "High"
+      },
+      {
+        "latitude": 42.373200000000004,
+        "longitude": -72.5199,
+        "status": "ok",
+        "score": 0.041277777777777774,
+        "percentile": 13,
+        "category": "Very Low"
+      },
+      {
+        "latitude": 42.3731974286608,
+        "longitude": -72.49561781048615,
+        "status": "ok",
+        "score": 0.6067142857142858,
+        "percentile": 75,
+        "category": "High"
+      },
+      {
+        "latitude": 42.37318971464405,
+        "longitude": -72.47133562493427,
+        "status": "ok",
+        "score": 0.2797142857142857,
+        "percentile": 63,
+        "category": "High"
+      },
+      {
+        "latitude": 42.37317685795239,
+        "longitude": -72.44705344730635,
+        "status": "ok",
+        "score": 0.13794444444444445,
+        "percentile": 39,
+        "category": "Low"
+      },
+      {
+        "latitude": 42.37315885859018,
+        "longitude": -72.42277128156434,
+        "status": "ok",
+        "score": 0.06366666666666668,
+        "percentile": 20,
+        "category": "Low"
+      },
+      {
+        "latitude": 42.37313571656357,
+        "longitude": -72.39848913167022,
+        "status": "ok",
+        "score": 0.2763174603174603,
+        "percentile": 63,
+        "category": "High"
+      },
+      {
+        "latitude": 42.391163768464395,
+        "longitude": -72.61705647197294,
+        "status": "ok",
+        "score": 0.5327817460317461,
+        "percentile": 75,
+        "category": "High"
+      },
+      {
+        "latitude": 42.39118177498029,
+        "longitude": -72.59276736786329,
+        "status": "ok",
+        "score": 0.23563492063492064,
+        "percentile": 58,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.391194636781734,
+        "longitude": -72.56847825185343,
+        "status": "ok",
+        "score": 0.6901388888888892,
+        "percentile": 76,
+        "category": "High"
+      },
+      {
+        "latitude": 42.39120235386435,
+        "longitude": -72.54418912791009,
+        "status": "ok",
+        "score": 0.26199206349206344,
+        "percentile": 62,
+        "category": "High"
+      },
+      {
+        "latitude": 42.39120492622553,
+        "longitude": -72.5199,
+        "status": "ok",
+        "score": 0.044500000000000005,
+        "percentile": 14,
+        "category": "Very Low"
+      },
+      {
+        "latitude": 42.39120235386435,
+        "longitude": -72.49561087208993,
+        "status": "ok",
+        "score": 0.2856944444444445,
+        "percentile": 64,
+        "category": "High"
+      },
+      {
+        "latitude": 42.391194636781734,
+        "longitude": -72.47132174814658,
+        "status": "ok",
+        "score": 0.07296825396825396,
+        "percentile": 22,
+        "category": "Low"
+      },
+      {
+        "latitude": 42.39118177498029,
+        "longitude": -72.44703263213673,
+        "status": "ok",
+        "score": 0.15366666666666665,
+        "percentile": 43,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.391163768464395,
+        "longitude": -72.42274352802707,
+        "status": "ok",
+        "score": 0.23972222222222223,
+        "percentile": 59,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.40916862157469,
+        "longitude": -72.61708424775347,
+        "status": "ok",
+        "score": 0.31893650793650785,
+        "percentile": 67,
+        "category": "High"
+      },
+      {
+        "latitude": 42.409186635249526,
+        "longitude": -72.59278819971539,
+        "status": "ok",
+        "score": 0.2138571428571428,
+        "percentile": 55,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.40919950216451,
+        "longitude": -72.5684921397628,
+        "status": "ok",
+        "score": 0.2572195767195768,
+        "percentile": 61,
+        "category": "High"
+      },
+      {
+        "latitude": 42.40920722231525,
+        "longitude": -72.54419607186715,
+        "status": "ok",
+        "score": 0.21192328042328035,
+        "percentile": 55,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.40920979569913,
+        "longitude": -72.5199,
+        "status": "ok",
+        "score": 0.4352420634920634,
+        "percentile": 73,
+        "category": "High"
+      },
+      {
+        "latitude": 42.40920722231525,
+        "longitude": -72.49560392813287,
+        "status": "ok",
+        "score": 0.23939285714285716,
+        "percentile": 59,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.40919950216451,
+        "longitude": -72.47130786023722,
+        "status": "ok",
+        "score": 0.0595978835978836,
+        "percentile": 18,
+        "category": "Very Low"
+      },
+      {
+        "latitude": 42.409186635249526,
+        "longitude": -72.44701180028463,
+        "status": "ok",
+        "score": 0.31180158730158736,
+        "percentile": 67,
+        "category": "High"
+      },
+      {
+        "latitude": 42.40916862157469,
+        "longitude": -72.42271575224655,
+        "status": "ok",
+        "score": 0.4697619047619047,
+        "percentile": 74,
+        "category": "High"
+      },
+      {
+        "latitude": 42.42717341791805,
+        "longitude": -72.61711204580179,
+        "status": "ok",
+        "score": 0.45854761904761904,
+        "percentile": 73,
+        "category": "High"
+      },
+      {
+        "latitude": 42.42719143875708,
+        "longitude": -72.59280904826835,
+        "status": "ok",
+        "score": 0.43721164021164033,
+        "percentile": 73,
+        "category": "High"
+      },
+      {
+        "latitude": 42.42720431078934,
+        "longitude": -72.56850603880605,
+        "status": "ok",
+        "score": 0.3787989417989419,
+        "percentile": 71,
+        "category": "High"
+      },
+      {
+        "latitude": 42.427212034010466,
+        "longitude": -72.54420302139117,
+        "status": "ok",
+        "score": 0.5777896825396825,
+        "percentile": 75,
+        "category": "High"
+      },
+      {
+        "latitude": 42.427214608417806,
+        "longitude": -72.5199,
+        "status": "ok",
+        "score": 0.4143373015873017,
+        "percentile": 72,
+        "category": "High"
+      },
+      {
+        "latitude": 42.427212034010466,
+        "longitude": -72.49559697860884,
+        "status": "ok",
+        "score": 0.29024603174603175,
+        "percentile": 64,
+        "category": "High"
+      },
+      {
+        "latitude": 42.42720431078934,
+        "longitude": -72.47129396119396,
+        "status": "ok",
+        "score": 0.04457010582010582,
+        "percentile": 14,
+        "category": "Very Low"
+      },
+      {
+        "latitude": 42.42719143875708,
+        "longitude": -72.44699095173166,
+        "status": "ok",
+        "score": 0.28517460317460314,
+        "percentile": 64,
+        "category": "High"
+      },
+      {
+        "latitude": 42.42717341791805,
+        "longitude": -72.42268795419822,
+        "status": "ok",
+        "score": 0.21275000000000002,
+        "percentile": 55,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.445196185499945,
+        "longitude": -72.5928299135406,
+        "status": "ok",
+        "score": 0.30700793650793645,
+        "percentile": 66,
+        "category": "High"
+      },
+      {
+        "latitude": 42.44520906265327,
+        "longitude": -72.56851994899552,
+        "status": "ok",
+        "score": 0.2946349206349206,
+        "percentile": 65,
+        "category": "High"
+      },
+      {
+        "latitude": 42.445216788947015,
+        "longitude": -72.5442099764883,
+        "status": "ok",
+        "score": 0.2067777777777777,
+        "percentile": 54,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.44521936437856,
+        "longitude": -72.5199,
+        "status": "ok",
+        "score": 0.36815873015873013,
+        "percentile": 70,
+        "category": "High"
+      },
+      {
+        "latitude": 42.445216788947015,
+        "longitude": -72.49559002351171,
+        "status": "ok",
+        "score": 0.6042037037037036,
+        "percentile": 75,
+        "category": "High"
+      },
+      {
+        "latitude": 42.44520906265327,
+        "longitude": -72.4712800510045,
+        "status": "ok",
+        "score": 0.14600000000000002,
+        "percentile": 41,
+        "category": "Moderate"
+      },
+      {
+        "latitude": 42.445196185499945,
+        "longitude": -72.44697008645942,
+        "status": "ok",
+        "score": 0.10619047619047621,
+        "percentile": 30,
+        "category": "Low"
+      },
+      {
+        "latitude": 42.46322406357845,
+        "longitude": -72.5199,
+        "status": "ok",
+        "score": 0.3037063492063492,
+        "percentile": 66,
+        "category": "High"
+      }
+    ],
+    "evaluated_points": 81,
+    "unavailable_points": 0,
+    "mean_score": 0.2984317142619612,
+    "model": "Random Forest",
+    "training_observations": 478
+  }
+}

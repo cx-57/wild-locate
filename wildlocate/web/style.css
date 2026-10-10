@@ -341,3 +341,63 @@ body.busy .status:before{content:"";display:inline-block;width:7px;height:7px;ba
   .inline-form{grid-template-columns:1fr}
   .inline-form .secondary{width:100%}
 }
+
+/* Conservation workflow: explanations, experiments, and survey takeaways. */
+.intro{max-width:980px}
+.intro h1{max-width:880px;font-size:clamp(28px,3vw,42px)}
+.intro p{font-size:14px;max-width:780px}
+.example-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:20px}
+.example-actions .hint{width:100%;margin:0}
+.hint,.status,.coordinates,summary,.text-button{font-size:12px}
+label,.segmented button,.nav-link,.nav-primary{font-size:12px}
+.result-actions{display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.assessment-origin{font-size:12px;color:#49644f;margin:12px 0;background:#eff5eb;border-radius:7px;padding:10px 12px}
+.insight-section{border-top:1px solid var(--line);margin-top:22px;padding-top:22px}
+.insight-section h3{font-size:18px;margin:5px 0 10px}
+.influence-grid,.scenario-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}
+.influence-grid .research-row{padding:14px;background:#f7f9f4;border:1px solid var(--line);border-radius:10px}
+.influence-grid .research-row strong,.influence-grid .research-row span{font-size:12px;line-height:1.6}
+.scenario-heading{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.scenario-heading label{margin:0 0 5px}
+.scenario-heading select{min-width:100px;background:white}
+.scenario-card{padding:18px;border:1px solid #cddcc5;border-radius:12px;background:#f7faf4;break-inside:avoid}
+.scenario-card h4{font-size:14px;line-height:1.4;margin:0 0 15px}
+.scenario-comparison{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px}
+.scenario-comparison span{font-size:18px;color:#657666}
+.scenario-comparison strong{font-size:23px;color:var(--green);font-weight:600}
+.scenario-change{font-size:12px;margin:7px 0;color:#546754}
+.survey-list{display:grid;gap:8px;margin-top:14px}
+.survey-sample{text-align:left;padding:14px;background:#f7f9f4;border:1px solid var(--line);border-radius:10px;color:var(--ink)}
+.survey-sample:hover{background:#e9f1e3;border-color:#9db58e}
+.survey-sample strong,.survey-sample span{display:block;font-size:12px;line-height:1.6}
+.survey-sample span{color:#5a705c;margin-top:3px}
+.leaflet-tooltip.sample-rank{background:transparent;border:0;box-shadow:none;color:white;font-weight:800;font-size:11px;padding:0}
+.evidence-panel{margin-top:22px;padding:18px;background:#fafbf8;border:1px solid var(--line);border-radius:12px;break-inside:avoid}
+.evidence-panel h3{font-size:16px}
+.evidence-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 18px}
+.evidence-stats .review-stat span{font-size:12px}.evidence-stats .review-stat strong{font-size:14px}
+.next-step{font-size:13px;padding:14px;border-left:3px solid var(--green);background:#f0f5ec}
+.disclaimer,.review-note{font-size:12px;color:#63725f}
+#result{scroll-margin-top:18px}
+@media(max-width:650px){
+  .influence-grid,.scenario-grid{grid-template-columns:1fr}
+  .result-title{align-items:flex-start;flex-wrap:wrap}
+  .result-actions{justify-content:flex-start}
+  .scenario-heading{align-items:flex-start}
+  .scenario-comparison strong{font-size:21px}
+}
+@media print{
+  @page{size:A4;margin:15mm}
+  body{background:white;color:#17281c;font-size:11pt}
+  header,.intro,.controls,footer,.map-top,.result-actions,.deep-dive-cta,#auth-screen,
+  #species-page,#deep-dive-page,#empty,.scenario-heading select,.scenario-heading label{display:none!important}
+  main{max-width:none;padding:0;margin:0}
+  .workspace{display:block}.panel{border:0;border-radius:0;overflow:visible}
+  #map{height:60mm!important;break-inside:avoid}
+  .results{padding:12px 0}.table-scroll{max-height:none;overflow:visible}
+  .scenario-grid,.influence-grid{display:grid;grid-template-columns:1fr 1fr}
+  .scenario-card,.evidence-panel,.influence-grid .research-row{background:white}
+  .hint,.scenario-change,.disclaimer,.review-note{font-size:9pt;color:#354b38}
+  .survey-sample{background:white}.survey-sample span{color:#354b38}
+  button{color:#17281c}h2,h3{break-after:avoid}
+}
