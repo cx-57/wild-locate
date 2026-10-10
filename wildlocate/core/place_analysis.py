@@ -241,7 +241,7 @@ def analyze_places(points, latitude, longitude, radius_km, region, evaluate):
     for candidate in candidates:
         site = {key: value for key, value in candidate.items() if not key.startswith("_")}
         site.update(signals=[], supporting_signals=[], strongest_signal_points=0.0,
-                    assessment_status="unavailable", field_checks=_field_checks(candidate["kind"]))
+                    assessment_status="unavailable", terrain_sample=False, field_checks=_field_checks(candidate["kind"]))
         try:
             assessment = evaluate(candidate["latitude"], candidate["longitude"])
             _validate_assessment(assessment)
