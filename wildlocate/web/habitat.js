@@ -19,7 +19,7 @@ function showResult(data) {
   $('empty').hidden = true;
   $('result').hidden = false;
   $('result-kind').textContent = area ? 'SURROUNDING AREA' : 'YOUR LOCATION';
-  // New assessments always start with the concise result, not expanded details.
+  // Keep the next assessment concise by default
   $('assessment-details').open = false;
   $('result-title').textContent = area
     ? `${data.species} · ${data.radius_km} km radius`
