@@ -3,13 +3,9 @@
 import json
 import math
 import mimetypes
-import os
 from pathlib import Path
 import secrets
-import subprocess
-import sys
 import threading
-import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
@@ -25,7 +21,6 @@ from wildlocate.core.registry import (
 )
 from wildlocate.core.regional import REGIONS, get_region
 from wildlocate.core.observations import species_suggestions
-from wildlocate.core.registry import cleanup_job
 
 ROOT = Path(__file__).resolve().parent
 VENDOR = ROOT.parent / "gui"
