@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#265c42">
   <title>Wild-Locate · Habitat Explorer</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='11' fill='%23265c42'/%3E%3Cpath d='M29 10C16 9 10 16 12 25c8 4 18-2 17-15Z' fill='%23e3edb9'/%3E%3Cpath d='m10 31 15-16' fill='none' stroke='%23265c42' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/vendor/leaflet.css">
   <link rel="stylesheet" href="/style.css">
   <script defer src="/vendor/leaflet.js"></script>
@@ -12,11 +14,11 @@
 <body>
 <section id="auth-screen" class="auth-shell" hidden>
   <div class="auth-card">
-    <div class="brand-row"><span class="mark" aria-hidden="true">↗</span><span class="brand-text">Wild-Locate</span></div>
+    <div class="brand-row"><span class="mark" aria-hidden="true"><svg viewBox="0 0 40 40" focusable="false"><path d="M29 10C16 9 10 16 12 25c8 4 18-2 17-15Z" fill="currentColor"/><path d="m10 31 15-16" fill="none" stroke="#265c42" stroke-width="2.5" stroke-linecap="round"/></svg></span><span class="brand-text">Wild-Locate</span></div>
     <div>
-      <span class="eyebrow">LOCAL ACCOUNT</span>
-      <h1 id="auth-title">Welcome back.</h1>
-      <p id="auth-copy">Sign in to explore habitat and manage your models.</p>
+      <span class="eyebrow">YOUR ACCOUNT</span>
+      <h1 id="auth-title" tabindex="-1">Welcome back.</h1>
+      <p id="auth-copy">Sign in to train species and keep your saved models</p>
     </div>
     <form id="auth-form">
       <label for="auth-username">Username</label>
@@ -31,18 +33,18 @@
       <button class="primary" id="auth-submit" type="submit">Sign in <span>→</span></button>
       <button class="text-button auth-switch" id="auth-switch" type="button">New here? Create an account</button>
     </form>
-    <p class="auth-note">Accounts and custom models stay on this computer.</p>
-    <button id="auth-back" class="text-button" type="button">Continue exploring without an account →</button>
+    <p class="auth-note">Your account and trained models stay on this computer</p>
+    <button id="auth-back" class="text-button" type="button">Explore without an account →</button>
   </div>
 </section>
 
 <div id="app-shell" hidden>
 <header>
-  <a class="brand" href="/" aria-label="Wild-Locate home"><span class="mark" aria-hidden="true">↗</span> Wild-Locate</a>
+  <a class="brand" href="/" aria-label="Wild-Locate home"><span class="mark" aria-hidden="true"><svg viewBox="0 0 40 40" focusable="false"><path d="M29 10C16 9 10 16 12 25c8 4 18-2 17-15Z" fill="currentColor"/><path d="m10 31 15-16" fill="none" stroke="#265c42" stroke-width="2.5" stroke-linecap="round"/></svg></span> Wild-Locate</a>
   <nav class="primary-nav" aria-label="Wild-Locate sections">
     <button id="explore-nav" type="button" class="nav-link" aria-current="page">Explore habitat</button>
     <button id="train-species-nav" type="button" class="nav-primary">Train a species</button>
-    <button id="models-nav" type="button" class="nav-link">Model library</button>
+    <button id="models-nav" type="button" class="nav-link">Saved models</button>
   </nav>
   <nav class="top-actions" aria-label="Account">
     <span id="account-name" class="account-name"></span>
@@ -52,30 +54,31 @@
 
 <main id="explore-page">
   <section class="intro">
-    <span class="eyebrow">HABITAT EXPLORER</span>
-    <h1>Find habitat. Understand it. Explore what could change.</h1>
-    <p>Habitat intelligence for community conservation. Shortlist field-survey sites and test land-cover hypotheses with species-specific machine learning.</p>
+    <div class="intro-copy">
+      <span class="eyebrow">HABITAT EXPLORER</span>
+      <h1 id="explore-heading" tabindex="-1">Find habitat. Understand why.</h1>
+      <p>Explore wildlife habitat and find places to check in the field</p>
+    </div>
     <div class="example-actions">
       <button id="try-example" class="secondary compact" type="button">Try the Amherst example ↗</button>
-      <button id="try-area-example" class="text-button" type="button">Explore its 10 km landscape →</button>
     </div>
   </section>
 
   <div class="workspace">
     <aside class="panel controls">
-      <div class="section-title"><span class="step">01</span><h2>Your exploration</h2></div>
+      <div class="section-title"><h2>Start exploring</h2></div>
       <form id="analysis-form">
         <fieldset id="inputs" disabled>
-          <label for="region">State</label>
-          <select id="region"></select>
-          <label for="species">Species</label>
-          <select id="species"></select>
-          <p id="species-note" class="hint">Loading local models…</p>
+          <div class="selection-fields">
+            <div class="form-field"><label for="region">State</label><select id="region"></select></div>
+            <div class="form-field"><label for="species">Species</label><select id="species" aria-describedby="species-note"></select></div>
+          </div>
+          <p id="species-note" class="hint">Loading available species…</p>
 
           <div class="line"></div>
-          <label>Analysis type</label>
-          <div class="segmented" role="group" aria-label="Analysis type">
-            <button type="button" id="point-mode" aria-pressed="true">Single point</button>
+          <span class="field-label">Explore</span>
+          <div class="segmented" role="group" aria-label="Area to explore">
+            <button type="button" id="point-mode" aria-pressed="true">One location</button>
             <button type="button" id="area-mode" aria-pressed="false">Surrounding area</button>
           </div>
 
@@ -86,13 +89,12 @@
               <option value="25">25 km</option>
               <option value="50">50 km</option>
             </select>
-            <p class="hint">81 sample points across the surrounding landscape.</p>
+            <p class="hint">Samples locations across this area</p>
           </div>
 
           <div class="line"></div>
-          <label>Center location</label>
+          <span class="field-label">Center location</span>
           <p id="selected-location" class="coordinates"></p>
-          <p class="hint">Click the map to move your center.</p>
 
           <details class="manual">
             <summary>Enter coordinates</summary>
@@ -105,20 +107,20 @@
         <button id="analyze" class="primary" disabled>Analyze habitat <span aria-hidden="true">↗</span></button>
       </form>
       <button type="button" id="cancel" class="secondary" hidden>Cancel analysis</button>
-      <p id="status" class="status" role="status" aria-live="polite">Connecting to local models…</p>
+      <p id="status" class="status" role="status" aria-live="polite">Getting ready…</p>
       <p id="error" class="error" role="alert" hidden></p>
     </aside>
 
     <section class="panel landscape" aria-label="Habitat map and results">
-      <div class="map-top"><span class="eyebrow">MAP</span><button id="reset-map" type="button" class="text-button">Show state ↗</button></div>
+      <div class="map-top"><div><h2>Choose a location</h2><p class="hint">Scroll or pinch to zoom, then click to choose a location</p></div><button id="reset-map" type="button" class="text-button">Show state ↗</button></div>
       <div id="map" role="region" aria-label="Interactive habitat map"></div>
       <p id="map-status" class="map-status" role="status" hidden></p>
 
       <div class="results">
         <div id="empty">
           <span class="eyebrow">RESULTS</span>
-          <h2>Choose a species and location.</h2>
-          <p>Analysis results will appear here.</p>
+          <h2>Choose a species and location</h2>
+          <p>Your habitat results will appear here</p>
         </div>
 
         <div id="result" hidden>
@@ -127,17 +129,22 @@
             <div class="result-actions"><button id="print-report" type="button" class="text-button">Print / save PDF</button><button id="export" type="button" class="text-button">Export JSON ↓</button></div>
           </div>
           <p id="assessment-origin" class="assessment-origin" role="status"></p>
+          <div id="legend" class="legend" aria-label="Suitability categories">
+            <span><i class="very-low"></i>Very low</span><span><i class="low"></i>Low</span>
+            <span><i class="moderate"></i>Moderate</span><span><i class="high"></i>High</span>
+            <span><i class="very-high"></i>Very high</span><span><i class="unavailable"></i>No data</span>
+          </div>
           <div id="metrics" class="metrics"></div>
 
           <section id="point-percentile" class="percentile-card" hidden aria-label="Relative habitat percentile">
             <div class="percentile-heading">
               <div>
-                <span class="eyebrow">RELATIVE HABITAT PERCENTILE</span>
+                <span class="eyebrow">COMPARED WITH OTHER LOCATIONS</span>
                 <strong id="percentile-value">—</strong>
               </div>
               <span id="percentile-category" class="percentile-category"></span>
             </div>
-            <div id="percentile-track" class="percentile-track" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div id="percentile-track" class="percentile-track" role="meter" aria-label="Relative habitat percentile" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
               <span class="percentile-marker" id="percentile-marker" aria-hidden="true"></span>
             </div>
             <div class="percentile-scale" aria-hidden="true">
@@ -147,33 +154,28 @@
           </section>
 
           <section id="point-insights" class="insight-section" hidden>
-            <h3>What is shaping this score?</h3>
-            <p class="hint">Each comparison replaces one condition with its typical training value. These separate model sensitivities do not add up or prove causation.</p>
+            <h3>What shapes this score?</h3>
+            <p class="hint">Each comparison changes one condition to its typical value, with score changes shown on a 0–100 scale. These changes do not prove cause and effect.</p>
             <div id="influence-rows" class="influence-grid"></div>
           </section>
           <section id="scenario-panel" class="insight-section" hidden>
-            <div class="scenario-heading"><div><span class="eyebrow">HYPOTHESIS LAB</span><h3>What if this landscape changed?</h3></div>
-              <div><label for="scenario-level">Relative change</label><select id="scenario-level"><option value="0.1">10%</option><option value="0.25" selected>25%</option><option value="0.5">50%</option></select></div>
+            <div class="scenario-heading"><div><h3>What if the habitat changed?</h3></div>
+              <div><label for="scenario-level">Amount of change</label><select id="scenario-level"><option value="0.1">10%</option><option value="0.25" selected>25%</option><option value="0.5">50%</option></select></div>
             </div>
-            <p class="hint">Explore hypothetical changes to the 250 m and 1 km environmental summaries. Other features stay fixed; this is not a parcel design or a forecast of restoration success.</p>
+            <p class="hint">Try changing the surrounding land cover while keeping other conditions fixed to see how the score responds. These comparisons suggest ideas to investigate, not forecasts.</p>
             <div id="scenario-cards" class="scenario-grid" aria-live="polite"></div>
           </section>
           <section id="survey-panel" class="insight-section" hidden>
-            <span class="eyebrow">FIELD-SURVEY SHORTLIST</span><h3>Three samples to investigate first</h3>
+            <span class="eyebrow">PLACES TO CHECK</span><h3>Where to look first</h3>
             <p id="survey-copy" class="hint"></p><div id="survey-list" class="survey-list"></div>
           </section>
           <section id="evidence-panel" class="evidence-panel" hidden>
-            <h3>Evidence behind this assessment</h3><div id="evidence-stats" class="evidence-stats"></div>
+            <h3>About these results</h3><div id="evidence-stats" class="evidence-stats"></div>
             <p id="evidence-copy" class="hint"></p>
-            <details><summary>Data sources and interpretation</summary><p id="evidence-sources" class="hint"></p><p class="hint">Background observations are not confirmed absences. Citizen-science sampling bias remains. Percentiles use the fitted model's comparison dataset; they are not confidence estimates.</p></details>
+            <details><summary>Sources and limitations</summary><p id="evidence-sources" class="hint"></p><p class="hint">Wildlife observations reflect where people look and report sightings, so a location without reports is not a confirmed absence. Percentiles compare scores rather than measure confidence.</p></details>
           </section>
           <p id="next-step" class="next-step"></p>
           <p id="result-note" class="hint"></p>
-          <div id="legend" class="legend" aria-label="Suitability categories">
-            <span><i class="very-low"></i>Very low</span><span><i class="low"></i>Low</span>
-            <span><i class="moderate"></i>Moderate</span><span><i class="high"></i>High</span>
-            <span><i class="very-high"></i>Very high</span><span><i class="unavailable"></i>No data</span>
-          </div>
           <details id="scores">
             <summary>View all scores</summary>
             <div class="table-scroll">
@@ -184,12 +186,12 @@
               </table>
             </div>
           </details>
-          <details id="conditions" hidden><summary>Environmental conditions</summary><dl id="feature-values"></dl></details>
-          <p class="disclaimer">Suitability is relative, not a probability that an animal is present. Regional results sample a grid, not continuous habitat coverage.</p>
+          <details id="conditions" hidden><summary>Conditions at this location</summary><dl id="feature-values"></dl></details>
+          <p class="disclaimer">Scores compare habitat conditions without telling you whether an animal is present, and area results describe sampled locations rather than every place between them.</p>
           <section id="deep-dive-cta" class="deep-dive-cta">
             <div>
-              <h3>Deep Dive</h3>
-              <p id="deep-dive-cta-copy" class="hint">Analyze this area in more detail.</p>
+              <h3>Take a closer look</h3>
+              <p id="deep-dive-cta-copy" class="hint">Analyze this area in more detail</p>
             </div>
             <button id="deep-dive-launch" type="button" class="deep-dive-launch">Open Deep Dive <span aria-hidden="true">→</span></button>
           </section>
@@ -198,67 +200,119 @@
     </section>
   </div>
 
-  <footer><span>Wild-Locate</span></footer>
+  <footer><span>Wild-Locate</span><span>For community conservation</span></footer>
 </main>
 
 <main id="deep-dive-page" class="deep-dive-page" hidden>
   <section class="deep-dive-hero">
-    <button id="deep-dive-back" type="button" class="text-button deep-dive-back">← Back</button>
-    <h1 id="deep-dive-title">Deep Dive</h1>
+    <button id="deep-dive-back" type="button" class="text-button deep-dive-back">← Back to exploration</button>
+    <span class="eyebrow">A CLOSER LOOK</span>
+    <h1 id="deep-dive-title" tabindex="-1">Deep Dive</h1>
     <p id="deep-dive-meta"></p>
+    <p id="deep-dive-demo-note" class="notice" hidden></p>
   </section>
 
   <section id="deep-dive-loading" class="panel deep-dive-loading" hidden aria-live="polite">
-    <h2>Analyzing landscape…</h2>
-    <p id="deep-dive-loading-stage">Sampling habitat…</p>
+    <h2>Analyzing this area…</h2>
+    <p>Checking habitat at sample locations across this area, which may take a few minutes</p>
+    <p id="deep-dive-loading-stage" class="status left">Starting analysis…</p>
     <div class="deep-dive-progress" aria-hidden="true"><span></span></div>
-    <button id="deep-dive-cancel" type="button" class="secondary compact">Cancel</button>
+    <button id="deep-dive-cancel" type="button" class="secondary compact">Cancel Deep Dive</button>
   </section>
-  <p id="deep-dive-error" class="error" hidden></p>
+  <p id="deep-dive-error" class="error" role="alert" hidden></p>
+  <button id="deep-dive-retry" type="button" class="secondary compact retry-button" hidden>Try Deep Dive again ↗</button>
 
   <div id="deep-dive-content" hidden>
-    <section class="panel research-card">
-      <h2>Overview</h2>
+    <div class="deep-dive-toolbar"><span class="section-caption">Your landscape report</span><div class="result-actions"><button id="deep-dive-print" type="button" class="text-button">Print / save PDF</button><button id="deep-dive-export" type="button" class="text-button">Export JSON ↓</button></div></div>
+    <section class="panel research-card deep-dive-overview-card">
+      <span class="eyebrow">AT A GLANCE</span>
+      <h2>The area around you</h2>
+      <p id="deep-dive-summary" class="landscape-summary"></p>
       <div id="deep-dive-overview" class="research-metrics"></div>
       <p id="deep-dive-overview-copy" class="research-copy"></p>
+      <p id="deep-dive-coverage-note" class="coverage-note"></p>
     </section>
 
-    <section class="panel deep-dive-map-card">
-      <div class="deep-dive-section-heading"><h2>Habitat map</h2></div>
-      <div id="deep-dive-map" role="region" aria-label="Deep Dive habitat map"></div>
-      <p id="deep-dive-map-status" class="map-status" hidden></p>
+    <section class="deep-dive-field-grid" aria-label="Habitat map and survey shortlist">
+      <div class="panel deep-dive-map-card">
+        <div class="deep-dive-section-heading"><h2>Habitat samples</h2><p class="hint">Scroll or pinch to zoom, then select a sample for details</p></div>
+        <div id="deep-dive-map" role="region" aria-label="Deep Dive habitat map"></div>
+        <p id="deep-dive-map-status" class="map-status" role="status" hidden></p>
+        <div class="map-key">
+          <div class="legend" aria-label="Suitability categories"><span><i class="very-low"></i>Very low</span><span><i class="low"></i>Low</span><span><i class="moderate"></i>Moderate</span><span><i class="high"></i>High</span><span><i class="very-high"></i>Very high</span><span><i class="unavailable"></i>No data</span></div>
+          <p class="hint">Dots show sampled locations, with numbers marking the places listed alongside the map</p>
+          <p id="deep-dive-places-map-key" class="hint places-map-key" hidden><span aria-hidden="true" class="place-key-mark">P</span>P labels mark places to investigate below; lines and outlines show mapped roads and footprints</p>
+        </div>
+      </div>
+      <aside class="panel research-card field-shortlist">
+        <span class="eyebrow">PLACES TO CHECK</span>
+        <h2>Where to look first</h2>
+        <p class="research-copy">Start with the highest-scoring samples and check access and habitat on the ground before planning a visit</p>
+        <div id="deep-dive-survey-list" class="survey-list"></div>
+      </aside>
     </section>
 
-    <section class="deep-dive-analysis-grid">
+    <section id="deep-dive-places" class="panel research-card places-panel" aria-labelledby="deep-dive-places-heading">
+      <div class="places-heading"><div><span class="eyebrow">SPECIFIC LOCATIONS</span><h2 id="deep-dive-places-heading">Places to investigate</h2></div><span id="deep-dive-places-status" class="place-status"></span></div>
+      <p id="deep-dive-places-summary" class="research-copy"></p>
+      <p id="deep-dive-places-coverage" class="places-coverage"></p>
+      <div id="deep-dive-places-list" class="places-list"></div>
+      <details class="places-method"><summary>How these places were chosen</summary><div id="deep-dive-places-evidence" class="research-copy"></div></details>
+    </section>
+
+    <section class="deep-dive-analysis-grid" aria-label="Landscape comparison">
       <article class="panel research-card">
-        <h2>Strengths</h2>
+        <h2>How the samples compare</h2>
+        <div id="deep-dive-distribution" class="distribution-list"></div>
+      </article>
+      <article class="panel research-card">
+        <h2>Which direction looks strongest?</h2>
+        <div id="deep-dive-sectors" class="sector-list"></div>
+      </article>
+    </section>
+
+    <section class="deep-dive-analysis-grid" aria-label="Conditions shaping habitat">
+      <article class="panel research-card">
+        <h2>Supporting conditions</h2>
         <div id="deep-dive-strengths" class="research-list"></div>
       </article>
       <article class="panel research-card">
-        <h2>Weaknesses</h2>
+        <h2>Limiting conditions</h2>
         <div id="deep-dive-constraints" class="research-list"></div>
       </article>
+      <p id="deep-dive-insight-note" class="insight-note"></p>
     </section>
 
     <section class="panel research-card">
-      <h2>Pressure signals</h2>
+      <h2>What to check in the field</h2>
+      <p class="research-copy">Conditions the model links to lower scores in this area</p>
       <div id="deep-dive-pressures" class="pressure-grid"></div>
-      <p class="research-copy">Model signals, not confirmed ecological threats.</p>
+    </section>
+
+    <section class="panel research-card deep-dive-evidence-card">
+      <h2>About these results</h2>
+      <div id="deep-dive-evidence-stats" class="evidence-stats"></div>
+      <p id="deep-dive-evidence-copy" class="research-copy"></p>
+      <details>
+        <summary>Sources and limitations</summary>
+        <p id="deep-dive-evidence-sources" class="research-copy"></p>
+        <p class="research-copy">Scores compare habitat conditions rather than the probability that an animal is present, and samples do not describe every place between them. Wildlife observations reflect where people look and report sightings, so a location without reports is not a confirmed absence.</p>
+      </details>
     </section>
   </div>
 
-  <footer><span>Wild-Locate</span></footer>
+  <footer><span>Wild-Locate</span><span>For community conservation</span></footer>
 </main>
 
 <main id="species-page" class="species-page" hidden>
   <section class="species-hero">
     <div>
-      <span class="eyebrow">SPECIES STUDIO</span>
-      <h1>Train Wild-Locate on a new species.</h1>
-      <p>Build and validate habitat models from wildlife observations and environmental data.</p>
+      <span class="eyebrow">SPECIES TRAINING</span>
+      <h1 id="species-heading" tabindex="-1">Add a species to your explorations.</h1>
+      <p>Train a habitat model using wildlife sightings and local environmental data</p>
     </div>
     <div class="species-region-control">
-      <label for="species-region">Training region</label>
+      <label for="species-region">State</label>
       <select id="species-region"></select>
       <p id="manager-subtitle" class="hint"></p>
     </div>
@@ -268,11 +322,10 @@
     <section id="training-primary" class="panel training-primary">
       <div class="studio-heading">
         <div>
-          <span class="eyebrow">PRIMARY WORKFLOW</span>
           <h2>Train a new species</h2>
-          <p class="manager-copy">Find a mammal or reptile, check its data, train models, and review the result.</p>
+          <p class="manager-copy">Choose a species, check its data, and review the result</p>
         </div>
-        <span class="training-badge">ML pipeline</span>
+        <span class="training-badge">3 steps</span>
       </div>
 
       <div class="training-flow">
@@ -280,9 +333,10 @@
           <span class="step">01</span>
           <div>
             <h3>Find a species</h3>
-            <p class="hint">Enter a mammal or reptile common or scientific name.</p>
+            <p id="training-query-hint" class="hint">Use a mammal or reptile's common or scientific name</p>
             <form id="training-form" class="inline-form">
-              <input id="training-query" maxlength="100" placeholder="e.g. alligator, fox, black bear" required>
+              <label class="sr-only" for="training-query">Species name</label>
+              <input id="training-query" maxlength="100" placeholder="e.g. alligator, fox, black bear" aria-describedby="training-query-hint" required>
               <button id="find-species" class="secondary" type="submit">Find species</button>
             </form>
             <div id="training-suggestions" class="species-suggestions" hidden></div>
@@ -293,16 +347,16 @@
         <div class="training-step">
           <span class="step">02</span>
           <div>
-            <h3>Check observations and environmental data</h3>
-            <p id="training-summary" class="hint">Training requires at least 25 cleaned observations.</p>
+            <h3>Prepare and train</h3>
+            <p id="training-summary" class="hint">At least 25 usable wildlife sightings are needed</p>
             <div class="training-actions">
-              <button id="prepare-training" class="secondary" type="button" hidden>Confirm species and check data</button>
-              <button id="download-environment" class="secondary" type="button" hidden>Download environmental data</button>
-              <button id="start-training" class="primary" type="button" hidden>Start model training</button>
-              <button id="cancel-training" class="danger" type="button" hidden>Cancel operation</button>
+              <button id="prepare-training" class="secondary" type="button" hidden>Check data</button>
+              <button id="download-environment" class="secondary" type="button" hidden>Download habitat data</button>
+              <button id="start-training" class="primary" type="button" hidden>Start training</button>
+              <button id="cancel-training" class="danger" type="button" hidden>Cancel</button>
             </div>
-            <p id="training-status" class="status left" role="status">Choose a species to begin.</p>
-            <p id="training-error" class="error" hidden></p>
+            <p id="training-status" class="status left" role="status">Choose a species to begin</p>
+            <p id="training-error" class="error" role="alert" hidden></p>
             <details id="training-log" hidden><summary>Training details</summary><pre id="training-log-text"></pre></details>
           </div>
         </div>
@@ -310,16 +364,8 @@
         <div class="training-step">
           <span class="step">03</span>
           <div>
-            <h3>Compare candidate models</h3>
-            <p class="hint">Candidate models are compared with spatial cross-validation.</p>
-          </div>
-        </div>
-
-        <div class="training-step">
-          <span class="step">04</span>
-          <div>
-            <h3>Review before enabling</h3>
-            <p class="hint">Review validation metrics, then enable the model for habitat analysis.</p>
+            <h3>Review the result</h3>
+            <p class="hint">Review your trained model in Saved models, then choose whether to use it for habitat analysis</p>
           </div>
         </div>
       </div>
@@ -328,29 +374,29 @@
     <aside id="model-library" class="panel model-library">
       <div class="library-heading">
         <div>
-          <span class="eyebrow">YOUR MODEL LIBRARY</span>
-          <h2>Saved species models</h2>
+          <span class="eyebrow">YOUR SPECIES</span>
+          <h2>Saved models</h2>
         </div>
         <span id="model-count" class="model-count"></span>
       </div>
-      <p class="manager-copy">Bundled and custom models available for this account.</p>
+      <p class="manager-copy">Ready-to-use models and species you have trained</p>
       <div id="model-list" class="model-list" aria-label="Saved species models"></div>
 
       <div id="model-review" class="model-review">
-        <span class="eyebrow">MODEL REVIEW</span>
+        <span class="eyebrow">REVIEW</span>
         <h3 id="review-species">Select a model</h3>
-        <div id="review-details" class="review-details"><p class="hint">Choose a model to inspect validation.</p></div>
-        <p id="model-message" class="notice" hidden></p>
+        <div id="review-details" class="review-details"><p class="hint">Choose a species to see how its model performed</p></div>
+        <p id="model-message" class="notice" role="status" hidden></p>
         <div class="model-actions">
-          <button id="enable-model" type="button" class="primary">Enable model</button>
-          <button id="retrain-model" type="button" class="secondary">Retrain species</button>
-          <button id="delete-model" type="button" class="danger">Delete custom model</button>
+          <button id="enable-model" type="button" class="primary">Use for habitat analysis</button>
+          <button id="retrain-model" type="button" class="secondary">Train again</button>
+          <button id="delete-model" type="button" class="danger">Delete model</button>
         </div>
       </div>
     </aside>
   </section>
 
-  <footer><span>Wild-Locate Species Studio</span></footer>
+  <footer><span>Wild-Locate</span><span>For community conservation</span></footer>
 </main>
 </div>
 </body>

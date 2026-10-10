@@ -1,6 +1,7 @@
 'use strict';
 
 const $ = id => document.getElementById(id);
+const uiPhrase = value => String(value ?? '').trim().replace(/([^.])\.$/, '$1');
 
 let config = null;
 let token = null;
@@ -21,7 +22,14 @@ let deepDiveRevision = 0;
 let deepDiveBusy = false;
 let deepDiveMap = null;
 let deepDiveOverlay = null;
+let deepDiveBounds = null;
+let printMapViews = null;
 let deepDiveStageTimer = null;
+let deepDiveStarted = 0;
+let deepDiveResult = null;
+let deepDiveSource = null;
+const deepDiveSampleMarkers = new Map();
+const deepDivePlaceLayers = new Map();
 
 let managerRegion = 'MA';
 let modelRecords = [];
@@ -44,14 +52,15 @@ const ordinal = value => {
 };
 const coords = (lat, lon) =>
   `${Math.abs(lat).toFixed(4)}° ${lat >= 0 ? 'N' : 'S'} / ${Math.abs(lon).toFixed(4)}° ${lon >= 0 ? 'E' : 'W'}`;
+const scrollBehavior = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 
 function error(message) {
-  $('error').textContent = message || '';
+  $('error').textContent = uiPhrase(message);
   $('error').hidden = !message;
 }
 
 function authError(message) {
-  $('auth-error').textContent = message || '';
+  $('auth-error').textContent = uiPhrase(message);
   $('auth-error').hidden = !message;
 }
 
@@ -72,7 +81,7 @@ async function api(path, payload, method = payload === undefined ? 'GET' : 'POST
     data = {};
   }
   if (!response.ok) {
-    const failure = Error(data.error || 'Could not contact the local server.');
+    const failure = Error(data.error || 'Could not contact the local server');
     failure.status = response.status;
     throw failure;
   }
@@ -92,8 +101,8 @@ function setAuthMode(create) {
   authCreate = create;
   $('auth-title').textContent = create ? 'Create your account.' : 'Welcome back.';
   $('auth-copy').textContent = create
-    ? 'Create a local account for your trained species models and habitat work.'
-    : 'Sign in to explore habitat and access the species models saved to your account.';
+    ? 'Save the species models you train on this computer'
+    : 'Sign in to train species and keep your saved models';
   $('confirm-wrap').hidden = !create;
   $('auth-confirm').required = create;
   $('auth-submit').firstChild.textContent = create ? 'Create account ' : 'Sign in ';
@@ -113,7 +122,7 @@ $('auth-form').addEventListener('submit', async event => {
   const username = $('auth-username').value.trim();
   const password = $('auth-password').value;
   if (authCreate && password !== $('auth-confirm').value) {
-    authError('Your passwords don’t match.');
+    authError('Your passwords don’t match');
     return;
   }
   $('auth-submit').disabled = true;
@@ -151,6 +160,8 @@ $('sign-out').addEventListener('click', async () => {
   result = null;
   deepDiveJobId = null;
   deepDiveRevision += 1;
+  deepDiveResult = null;
+  deepDiveSource = null;
   deepDiveBusy = false;
   if (deepDiveStageTimer) clearInterval(deepDiveStageTimer);
   deepDiveStageTimer = null;
@@ -165,13 +176,13 @@ function initMap() {
   if (map || !window.L) {
     if (!window.L) {
       $('map-status').hidden = false;
-      $('map-status').textContent = 'Map unavailable. Enter coordinates manually.';
+      $('map-status').textContent = 'Map unavailable — enter coordinates manually';
       document.querySelector('.manual').open = true;
     }
     return;
   }
 
-  map = L.map('map', {scrollWheelZoom: false, minZoom: 3, maxZoom: 18})
+  map = L.map('map', {scrollWheelZoom: true, touchZoom: true, wheelPxPerZoomLevel: 80, zoomSnap: .25, minZoom: 3, maxZoom: 18})
     .setView([42.37, -72.28], 9);
   overlay = L.layerGroup().addTo(map);
 
@@ -187,7 +198,7 @@ function initMap() {
 
   tiles.on('tileerror', () => {
     $('map-status').hidden = false;
-    $('map-status').textContent = 'Map tiles are temporarily unavailable. Enter coordinates manually.';
+    $('map-status').textContent = 'Map tiles are temporarily unavailable — enter coordinates manually';
   });
   tiles.on('load', () => {
     $('map-status').hidden = true;
@@ -256,7 +267,7 @@ async function refreshConfig(preserveSelection = true) {
 
 function selection() {
   if (!$('latitude').value.trim() || !$('longitude').value.trim()) {
-    throw Error('Enter both latitude and longitude.');
+    throw Error('Enter both latitude and longitude');
   }
   const latitude = Number($('latitude').value);
   const longitude = Number($('longitude').value);
@@ -264,10 +275,10 @@ function selection() {
     !Number.isFinite(latitude) || Math.abs(latitude) > 90 ||
     !Number.isFinite(longitude) || Math.abs(longitude) > 180
   ) {
-    throw Error('Latitude must be −90 to 90; longitude must be −180 to 180.');
+    throw Error('Latitude must be −90 to 90; longitude must be −180 to 180');
   }
   if (!$('species').value) {
-    throw Error('No enabled model is available for this state. Train or enable a model.');
+    throw Error('Train or enable a model to explore this state');
   }
   return {
     species: $('species').value,
@@ -285,7 +296,6 @@ function setBusy(value) {
   $('train-species-nav').disabled = value;
   $('models-nav').disabled = value;
   $('try-example').disabled = value;
-  $('try-area-example').disabled = value;
   $('sign-out').disabled = value;
   $('analyze').disabled = value || !$('species').value;
   $('cancel').hidden = !value;
@@ -390,8 +400,8 @@ function changed(recenter = false) {
   clearResult();
   draw(recenter);
   $('status').textContent = $('species').value
-    ? 'Ready to explore.'
-    : 'No enabled model for this state. Train or enable a model.';
+    ? 'Ready to explore'
+    : 'Train or enable a model to explore this state';
 }
 
 function mode(value) {
@@ -422,10 +432,10 @@ function changeRegion(resetLocation = true, preferredSpecies = '') {
   }
 
   $('species-note').textContent = state.species.length
-    ? `${state.species.length} enabled species model${state.species.length === 1 ? '' : 's'} available.`
-    : 'No enabled model for this state. Train or enable a model.';
+    ? `${state.species.length} species ready to explore`
+    : 'Train or enable a model to explore this state';
   if (state.unavailable_models?.length) {
-    $('species-note').textContent += ` ${state.unavailable_models.join(', ')} unavailable in this runtime; inspect the model library to retrain.`;
+    $('species-note').textContent += ` · ${state.unavailable_models.join(', ')} need retraining in Saved models to run on this computer`;
   }
   $('analyze').disabled = !state.species.length;
   changed(resetLocation);
@@ -447,14 +457,15 @@ function showResult(data) {
   const area = data.analysis_type === 'regional';
   $('empty').hidden = true;
   $('result').hidden = false;
-  $('result-kind').textContent = area ? 'REGIONAL ASSESSMENT' : 'POINT ASSESSMENT';
+  $('result-kind').textContent = area ? 'SURROUNDING AREA' : 'YOUR LOCATION';
   $('result-title').textContent = area
     ? `${data.species} · ${data.radius_km} km radius`
     : data.species;
   $('assessment-origin').textContent = data.recorded_at
     ? `Recorded Amherst example · generated ${data.recorded_at.slice(0, 10)} · use Analyze habitat to recompute locally`
-    : 'Live assessment · computed locally from environmental data';
+    : 'Analyzed on this computer using local habitat data';
   $('metrics').replaceChildren();
+  $('metrics').hidden = !area;
 
   if (area) {
     const scored = (data.points || []).filter(p => p.status === 'ok' && Number.isFinite(p.percentile));
@@ -464,9 +475,6 @@ function showResult(data) {
     if (data.unavailable_points) metric(String(data.unavailable_points), 'Unavailable');
     $('point-percentile').hidden = true;
   } else {
-    metric(number(data.score), 'Suitability score');
-    metric(data.category, 'Habitat suitability');
-
     const percentile = Math.max(0, Math.min(100, Number(data.percentile) || 0));
     $('point-percentile').hidden = false;
     $('percentile-value').textContent = `${ordinal(percentile)} percentile`;
@@ -478,13 +486,13 @@ function showResult(data) {
       `${Math.round(percentile)}th percentile, ${data.category || 'habitat suitability'}`
     );
     $('percentile-copy').textContent =
-      `This location received a higher habitat-suitability score than approximately ${Math.round(percentile)}% of comparison locations for this species.`;
+      `This location scores higher than about ${Math.round(percentile)}% of the model’s comparison locations for ${data.species}`;
   }
 
   $('result-note').textContent =
-    `${data.model} · ${Number(data.training_observations || 0).toLocaleString()} training observations` +
+    `${data.model} · ${Number(data.training_observations || 0).toLocaleString()} recorded sightings` +
     (area && !data.evaluated_points
-      ? ' · No grid points could be evaluated. Try another location or a smaller radius.'
+      ? ' · No grid points could be evaluated — try another location or a smaller radius'
       : '');
 
   $('scores').hidden = !area;
@@ -517,18 +525,19 @@ function showResult(data) {
   }
 
   $('deep-dive-cta-copy').textContent = area
-    ? `Analyze the same ${data.radius_km} km area in more detail.`
-    : 'Analyze a 10 km area around this point.';
+    ? `See habitat patterns and places to check within this ${data.radius_km} km area`
+    : 'See habitat patterns and places to check around this location';
+  if (data.recorded_at) $('deep-dive-cta-copy').textContent += ' with a fresh analysis using your local data';
   $('status').textContent = area
-    ? 'Assessment complete. Select a map point for details.'
-    : 'Assessment complete.';
+    ? 'Assessment complete — select a map point for details'
+    : 'Assessment complete';
   renderPointInsights(data);
   renderEvidence(data);
   renderSurvey(data);
   $('legend').hidden = !area;
   $('next-step').textContent = area
-    ? 'Next: use these samples to plan field checks. Verify access, habitat on the ground, and local expertise before choosing survey sites.'
-    : 'Next: explore a hypothetical change, then discuss the result with local conservation experts and verify conditions in the field.';
+    ? 'Before a field visit, check access and habitat on the ground at the shortlisted locations'
+    : 'Use these comparisons to guide a closer look at the habitat on the ground';
   draw();
 }
 
@@ -548,8 +557,8 @@ function renderPointInsights(data) {
   if (insights?.error) researchRow($('influence-rows'), 'Interpretation unavailable', insights.error);
   for (const item of (insights?.influences || []).slice(0, 4)) {
     researchRow($('influence-rows'), friendlyFeature(item.feature),
-      `Here: ${featureValue(item.feature, item.current)} · typical: ${featureValue(item.feature, item.reference)}. ` +
-      `${item.effect >= 0 ? 'Raises' : 'Lowers'} the score by ${Math.abs(item.effect).toFixed(3)} compared with that replacement.`);
+      `Here: ${featureValue(item.feature, item.current)} · typical: ${featureValue(item.feature, item.reference)} · ` +
+      `${item.effect >= 0 ? 'Raises' : 'Lowers'} the model score by ${(Math.abs(item.effect) * 100).toFixed(1)} points compared with the typical value`);
   }
   $('scenario-panel').hidden = data.analysis_type === 'regional' || !insights || Boolean(insights.error);
   renderScenarios();
@@ -564,7 +573,7 @@ function renderScenarios() {
     const card = document.createElement('article');
     card.className = 'scenario-card';
     const title = document.createElement('h4');
-    title.textContent = scenario.title;
+    title.textContent = scenario.title.replace('developed cover', 'developed land').replace('impervious surface', 'pavement and rooftops');
     const comparison = document.createElement('div');
     comparison.className = 'scenario-comparison';
     const baseline = document.createElement('span');
@@ -575,7 +584,7 @@ function renderScenarios() {
     const caption = document.createElement('p');
     caption.className = 'hint';
     const delta = scenario.percentile - result.percentile;
-    caption.textContent = `${delta > 0 ? '+' : ''}${delta} percentile points · model score ${scenario.delta >= 0 ? '+' : ''}${scenario.delta.toFixed(3)}`;
+    caption.textContent = `${delta > 0 ? '+' : ''}${delta} percentile points`;
     card.append(title, comparison, caption);
     for (const change of scenario.changes) {
       const p = document.createElement('p');
@@ -586,13 +595,13 @@ function renderScenarios() {
     if (scenario.outside_training_range?.length) {
       const warning = document.createElement('p');
       warning.className = 'notice';
-      warning.textContent = 'Some hypothetical values fall outside the training range. Treat this result cautiously.';
+      warning.textContent = 'This result is less reliable because the change goes beyond the conditions the model learned from';
       card.append(warning);
     }
     parent.append(card);
   }
-  if (!scenarios.length) researchRow(parent, 'No supported change at this setting',
-    'This location has no applicable developed-cover or impervious-surface change, or this model lacks the required features.');
+  if (!scenarios.length) researchRow(parent, 'No changes available here',
+    'These comparisons need developed land or paved surfaces that can be changed in the model');
 }
 
 function renderEvidence(data) {
@@ -601,12 +610,39 @@ function renderEvidence(data) {
   $('evidence-stats').replaceChildren();
   if (!e) return;
   const parent = $('evidence-stats');
-  parent.append(reviewStat('Species observations', Number(e.presence_count).toLocaleString()),
-    reviewStat('Spatial validation', e.folds ? `${e.folds} folds · ${e.spatial_block_km} km blocks` : 'Not recorded'),
-    reviewStat('PR-AUC / prevalence reference', `${number(e.pr_auc)} / ${number(e.pr_reference)}`),
-    reviewStat('ROC-AUC', number(e.roc_auc)));
-  $('evidence-copy').textContent = e.interpretation;
-  $('evidence-sources').textContent = `Sources: ${(e.sources || []).join(' · ')}. ${data.model} · ${data.region}.`;
+  parent.append(reviewStat('Recorded sightings', Number(e.presence_count).toLocaleString()),
+    reviewStat('Background locations', Number(e.background_count).toLocaleString()), validationHelp(e, data.model));
+  $('evidence-copy').textContent = 'The model learns from recorded sightings and nearby environmental conditions, with results checked on locations left out of training.';
+  $('evidence-sources').textContent = (e.sources || []).join(' · ');
+}
+
+function validationHelp(metrics, model = '') {
+  const details = document.createElement('details');
+  details.className = 'metric-help';
+  const summary = document.createElement('summary');
+  summary.textContent = 'How was the model checked?';
+  const intro = document.createElement('p');
+  intro.textContent = `${model ? `${model} · ` : ''}` +
+    (metrics.folds ? `Tested in ${metrics.folds} groups of locations held out of training. ` : '') +
+    'These checks compare sightings with background locations without telling us the chance an animal is here.';
+  const stats = document.createElement('div');
+  stats.className = 'evidence-stats';
+  stats.append(reviewStat('ROC-AUC', number(metrics.roc_auc)),
+    reviewStat('PR-AUC', number(metrics.pr_auc)), reviewStat('PR reference', number(metrics.pr_reference)));
+  details.append(summary, intro, stats);
+  for (const [title, copy] of [
+    ['What is ROC-AUC?', 'ROC-AUC checks whether recorded sightings rank above background locations, where 1 means perfect separation in the test data and 0.5 is no better than chance. Background locations can still contain the species.'],
+    ['What is PR-AUC?', 'PR-AUC measures how well the model separates sightings from background locations as the score cutoff changes, with higher values meaning better performance on this check. Compare it with the PR reference, which depends on the share of sightings in the test data.'],
+  ]) {
+    const help = document.createElement('details');
+    const label = document.createElement('summary');
+    label.textContent = title;
+    const explanation = document.createElement('p');
+    explanation.textContent = copy;
+    help.append(label, explanation);
+    details.append(help);
+  }
+  return details;
 }
 
 function surveySamples(data) {
@@ -619,7 +655,7 @@ function renderSurvey(data) {
   const samples = surveySamples(data);
   $('survey-panel').hidden = !samples.length;
   $('survey-list').replaceChildren();
-  $('survey-copy').textContent = `Ranked among the evaluated grid samples for ${data.species}. Samples are spaced approximately ${data.grid_spacing_km} km apart; this is not continuous coverage or a parcel recommendation.`;
+  $('survey-copy').textContent = `Start with these high-scoring samples for ${data.species}, spaced about ${data.grid_spacing_km} km apart, and check access and habitat before visiting`;
   samples.forEach((point, index) => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -633,63 +669,55 @@ function renderSurvey(data) {
       if (!map) return;
       map.setView([point.latitude, point.longitude], 13);
       sampleMarkers.get(`${point.latitude},${point.longitude}`)?.openPopup();
-      $('map').scrollIntoView({behavior: 'smooth', block: 'center'});
+      $('map').scrollIntoView({behavior: scrollBehavior(), block: 'center'});
     });
     $('survey-list').append(button);
   });
 }
 
 $('scenario-level').addEventListener('change', renderScenarios);
-$('print-report').addEventListener('click', () => {
-  if (!result) return;
-  const closed = [...document.querySelectorAll('#result details:not([open])')];
-  closed.forEach(detail => { detail.open = true; });
-  window.print();
-  closed.forEach(detail => { detail.open = false; });
-});
+$('print-report').addEventListener('click', () => result && printCurrentReport('result', 'print-report'));
 
-async function loadExample(area = false) {
+async function loadExample() {
   if (busy || deepDiveBusy) return;
   $('try-example').disabled = true;
-  $('try-area-example').disabled = true;
   error('');
   try {
     const demo = await api('/api/demo');
-    const assessment = area ? demo.area : demo.point;
+    const assessment = demo.point;
     $('region').value = 'MA';
     changeRegion(false, assessment.species);
     $('latitude').value = assessment.latitude;
     $('longitude').value = assessment.longitude;
     $('radius').value = '10';
-    mode(area);
+    mode(false);
     $('scenario-level').value = '0.25';
     showResult({...assessment, recorded_at: demo.recorded_at});
     draw(true);
-    $('result').scrollIntoView({behavior: 'smooth', block: 'start'});
+    $('result').scrollIntoView({behavior: scrollBehavior(), block: 'start'});
   } catch (exc) { error(exc.message); }
   finally {
     $('try-example').disabled = false;
-    $('try-area-example').disabled = false;
   }
 }
-$('try-example').addEventListener('click', () => loadExample(false));
-$('try-area-example').addEventListener('click', () => loadExample(true));
+$('try-example').addEventListener('click', loadExample);
 
 function friendlyFeature(name) {
   return name
     .replace('forest_fraction', 'Forest cover')
-    .replace('developed_fraction', 'Developed cover')
+    .replace('developed_fraction', 'Developed land')
     .replace('wetland_fraction', 'Wetland cover')
     .replace('open_water_fraction', 'Open water')
-    .replace('mean_impervious', 'Impervious surface')
+    .replace('mean_impervious', 'Pavement and rooftops')
     .replace('distance_to_water_m', 'Distance to water')
     .replace('distance_to_road_m', 'Distance to roads')
     .replace('elevation_m', 'Elevation')
-    .replace('mean_slope', 'Mean slope')
-    .replace('terrain_ruggedness', 'Terrain ruggedness')
+    .replace('mean_slope', 'Average slope')
+    .replace('terrain_ruggedness', 'Terrain roughness')
     .replaceAll('_', ' ')
     .replace(/\b250m\b/g, '250 m')
-    .replace(/\b1000m\b/g, '1 km');
+    .replace(/\b1000m\b/g, '1 km')
+    .replace(/ (250 m|1 km)$/, ' within $1');
 }
 
 function researchMetric(parent, value, title) {
@@ -709,7 +737,7 @@ function researchRow(parent, title, detail) {
   const strong = document.createElement('strong');
   strong.textContent = title;
   const span = document.createElement('span');
-  span.textContent = detail;
+  span.textContent = uiPhrase(detail);
   row.append(strong, span);
   parent.append(row);
 }
@@ -718,11 +746,11 @@ function initDeepDiveMap() {
   if (deepDiveMap || !window.L) {
     if (!window.L) {
       $('deep-dive-map-status').hidden = false;
-      $('deep-dive-map-status').textContent = 'Map unavailable. The research summary is still usable.';
+      $('deep-dive-map-status').textContent = 'Map unavailable — the report is still available below';
     }
     return;
   }
-  deepDiveMap = L.map('deep-dive-map', {scrollWheelZoom: false, minZoom: 3, maxZoom: 18})
+  deepDiveMap = L.map('deep-dive-map', {scrollWheelZoom: true, touchZoom: true, wheelPxPerZoomLevel: 80, zoomSnap: .25, minZoom: 3, maxZoom: 18})
     .setView([42.37, -72.28], 9);
   deepDiveOverlay = L.layerGroup().addTo(deepDiveMap);
   const tiles = L.tileLayer(
@@ -736,7 +764,7 @@ function initDeepDiveMap() {
   );
   tiles.on('tileerror', () => {
     $('deep-dive-map-status').hidden = false;
-    $('deep-dive-map-status').textContent = 'Map tiles are temporarily unavailable. The research summary is still usable.';
+    $('deep-dive-map-status').textContent = 'Map tiles are temporarily unavailable — the report is still available below';
   });
   tiles.on('load', () => {
     $('deep-dive-map-status').hidden = true;
@@ -748,6 +776,8 @@ function drawDeepDiveMap(report) {
   initDeepDiveMap();
   if (!deepDiveMap || !deepDiveOverlay) return;
   deepDiveOverlay.clearLayers();
+  deepDiveSampleMarkers.clear();
+  deepDivePlaceLayers.clear();
   const center = [report.latitude, report.longitude];
   const circle = L.circle(center, {
     radius: report.radius_km * 1000,
@@ -756,6 +786,7 @@ function drawDeepDiveMap(report) {
     fillOpacity: 0.018,
     interactive: false,
   }).addTo(deepDiveOverlay);
+  deepDiveBounds = circle.getBounds();
 
   for (const point of report.points || []) {
     const ok = point.status === 'ok';
@@ -767,7 +798,7 @@ function drawDeepDiveMap(report) {
     popup.textContent = ok
       ? `${coords(point.latitude, point.longitude)} — ${point.category}, ${point.percentile}th percentile`
       : `${coords(point.latitude, point.longitude)} — unavailable`;
-    L.circleMarker([point.latitude, point.longitude], {
+    const marker = L.circleMarker([point.latitude, point.longitude], {
       radius: 4.5,
       color,
       weight: .8,
@@ -775,56 +806,102 @@ function drawDeepDiveMap(report) {
       fillOpacity: .88,
       bubblingMouseEvents: false,
     }).bindPopup(popup).addTo(deepDiveOverlay);
+    deepDiveSampleMarkers.set(`${point.latitude},${point.longitude}`, marker);
   }
-  deepDiveMap.fitBounds(circle.getBounds(), {padding: [26, 26], animate: false});
+  for (const point of report.survey_priorities || []) {
+    const marker = L.marker([point.latitude, point.longitude], {
+      icon: L.divIcon({className: 'survey-rank-marker', html: String(point.rank), iconSize: [28, 28], iconAnchor: [14, 14]}),
+      title: `Sample ${point.rank}: ${ordinal(point.percentile)} percentile`,
+    }).addTo(deepDiveOverlay);
+    const popup = document.createElement('div');
+    popup.textContent = `Sample ${point.rank} · ${ordinal(point.percentile)} percentile · ${coords(point.latitude, point.longitude)}`;
+    marker.bindPopup(popup);
+    deepDiveSampleMarkers.set(`${point.latitude},${point.longitude}`, marker);
+  }
+  drawDeepDivePlaces(report);
+  deepDiveMap.fitBounds(deepDiveBounds, {padding: [26, 26], animate: false});
   setTimeout(() => deepDiveMap && deepDiveMap.invalidateSize({pan: false}), 0);
 }
 
 function renderDeepDive(report) {
+  deepDiveResult = report;
   $('deep-dive-loading').hidden = true;
   $('deep-dive-error').hidden = true;
+  $('deep-dive-retry').hidden = true;
+  $('deep-dive-export').disabled = false;
+  $('deep-dive-print').disabled = false;
   $('deep-dive-content').hidden = false;
-  $('deep-dive-title').textContent = `${report.species} · Deep Dive`;
-  $('deep-dive-meta').textContent = `${report.radius_km} km · ${report.model}`;
+  $('deep-dive-title').textContent = `${report.species} habitat`;
+  $('deep-dive-meta').textContent = `${report.radius_km} km radius · ${report.model} · ${coords(report.latitude, report.longitude)}`;
 
   const overview = report.overview || {};
+  const evaluated = overview.evaluated_points ?? 0;
+  const total = overview.total_points ?? report.sample_points ?? evaluated;
+  const unavailable = overview.unavailable_points ?? report.unavailable_points ?? total - evaluated;
+  const coverage = total ? 100 * evaluated / total : 0;
+  const highShare = evaluated ? 100 * (overview.high_suitability_points || 0) / evaluated : 0;
   const metrics = $('deep-dive-overview');
   metrics.replaceChildren();
-  researchMetric(metrics, String(overview.evaluated_points ?? 0), 'Samples');
+  researchMetric(metrics, `${evaluated}/${total}`, 'Samples evaluated');
   researchMetric(
     metrics,
-    Number.isFinite(overview.mean_percentile) ? ordinal(overview.mean_percentile) : '—',
-    'Mean percentile'
+    Number.isFinite(overview.median_percentile) ? ordinal(overview.median_percentile)
+      : Number.isFinite(overview.mean_percentile) ? ordinal(overview.mean_percentile) : '—',
+    Number.isFinite(overview.median_percentile) ? 'Median habitat percentile' : 'Mean habitat percentile'
   );
-  researchMetric(metrics, String(overview.high_suitability_points ?? 0), 'High-suitability samples');
+  researchMetric(metrics, evaluated ? `${Math.round(highShare)}%` : '—', 'High or very high samples');
+  researchMetric(metrics, `${Math.round(coverage)}%`, 'Sample coverage');
+
+  $('deep-dive-coverage-note').textContent =
+    `${evaluated} of ${total} sample locations evaluated · ${unavailable} unavailable · ` +
+    `Samples are approximately ${report.grid_spacing_km ?? report.radius_km / 5} km apart and do not represent continuous habitat coverage`;
 
   const strongest = overview.strongest_point;
   const sector = overview.strongest_sector;
+  $('deep-dive-summary').textContent = !evaluated
+    ? 'No locations could be evaluated — try a smaller radius or another location, and check that the environmental datasets are available'
+    : `${overview.high_suitability_points || 0} of ${evaluated} samples have high or very high relative suitability for ${report.species}, ` +
+      (sector ? `and ${sector.name} has the highest average rank among directions with at least three samples.`
+        : 'with the map and shortlist showing where to take a closer look.');
   $('deep-dive-overview-copy').textContent = strongest
-    ? `Strongest sample: ${ordinal(strongest.percentile)} percentile${sector ? ` · strongest area: ${sector.name.toLowerCase()}` : ''}.`
-    : 'No usable habitat samples.';
+    ? `Strongest sample: ${ordinal(strongest.percentile)} percentile` +
+      (Number.isFinite(overview.min_percentile) && Number.isFinite(overview.max_percentile)
+        ? ` · Sample range: ${ordinal(overview.min_percentile)}–${ordinal(overview.max_percentile)} percentile` : '')
+    : 'A missing sample is a data gap, not a low-suitability result';
+
+  renderDeepDiveDistribution(report);
+  renderDeepDiveSurvey(report);
+  renderDeepDiveEvidence(report);
+  renderDeepDivePlaces(report);
+
+  const habitat = report.habitat || {};
+  const explanationUnavailable = habitat.status === 'unavailable';
+  const explained = habitat.explanation_points ?? evaluated;
+  const failed = habitat.failed_explanations ?? 0;
+  $('deep-dive-insight-note').textContent = !evaluated
+    ? 'No samples could be scored, so supporting and limiting conditions could not be evaluated'
+    : explanationUnavailable
+    ? `Scores are available for ${evaluated} samples, but their explanations could not be calculated`
+    : `${explained} of ${evaluated} evaluated samples have usable model explanations` +
+      (failed ? `; ${failed} explanations failed, so signals below describe only the explained samples` : '') +
+      '. Each comparison replaces one condition with its typical value, but effects overlap and do not prove cause and effect.';
 
   const strengths = $('deep-dive-strengths');
   strengths.replaceChildren();
-  for (const row of report.habitat?.strengths || []) {
-    researchRow(
-      strengths,
-      friendlyFeature(row.feature),
-      `+${number(row.mean_effect)} mean effect · ${row.affected_points}/${row.points_evaluated} samples`
-    );
-  }
-  if (!strengths.children.length) researchRow(strengths, 'None detected', 'No consistent positive model signal.');
+  for (const row of habitat.strengths || []) renderDeepDiveSignal(strengths, row);
+  if (!strengths.children.length) researchRow(strengths,
+    explanationUnavailable ? 'Explanations unavailable' : 'No positive average signal',
+    !evaluated ? 'No samples could be scored — try another location or check the habitat data'
+      : explanationUnavailable ? 'The model scores were calculated, but their explanations could not be evaluated'
+      : 'No condition had a meaningful positive average effect among the explained samples');
 
   const constraints = $('deep-dive-constraints');
   constraints.replaceChildren();
-  for (const row of report.habitat?.constraints || []) {
-    researchRow(
-      constraints,
-      friendlyFeature(row.feature),
-      `${number(row.mean_effect)} mean effect · ${row.affected_points}/${row.points_evaluated} samples`
-    );
-  }
-  if (!constraints.children.length) researchRow(constraints, 'None detected', 'No consistent negative model signal.');
+  for (const row of habitat.constraints || []) renderDeepDiveSignal(constraints, row);
+  if (!constraints.children.length) researchRow(constraints,
+    explanationUnavailable ? 'Explanations unavailable' : 'No negative average signal',
+    explanationUnavailable ? 'No conclusion about limiting conditions can be drawn from missing explanations'
+      : 'No condition had a meaningful negative average effect among the explained samples');
 
   const pressures = $('deep-dive-pressures');
   pressures.replaceChildren();
@@ -835,18 +912,316 @@ function renderDeepDive(report) {
     strong.textContent = pressure.domain;
     const detail = document.createElement('span');
     detail.textContent =
-      `${Math.round(pressure.affected_percentage)}% of samples · ${pressure.features.map(friendlyFeature).join(', ')}`;
+      `Linked to lower scores at ${pressure.affected_points} of ${pressure.points_evaluated ?? explained} explained samples (${Math.round(pressure.affected_percentage)}%) · ` +
+      `${(pressure.features || []).map(friendlyFeature).join(', ')}`;
     card.append(strong, detail);
     pressures.append(card);
   }
   if (!pressures.children.length) {
     const card = document.createElement('div');
     card.className = 'pressure-card';
-    card.textContent = 'No consistent negative pressure signal.';
+    card.textContent = explanationUnavailable ? 'These conditions could not be evaluated'
+      : 'No conditions consistently lowered scores among the explained samples';
     pressures.append(card);
   }
 
   drawDeepDiveMap(report);
+}
+
+function validPlaceLocation(site) {
+  return site && Number.isFinite(site.latitude) && Math.abs(site.latitude) <= 90 &&
+    Number.isFinite(site.longitude) && Math.abs(site.longitude) <= 180;
+}
+
+function placeLabel(site) {
+  if (site.kind === 'habitat') return site.terrain_sample ? 'Terrain' : 'Habitat area';
+  return ({road: 'Road', building: 'Building'})[site.kind] || 'Place';
+}
+
+function placeSourceLink(parent, label, value) {
+  if (typeof value !== 'string') return;
+  try {
+    const url = new URL(value);
+    if (!['https:', 'http:'].includes(url.protocol)) return;
+    const link = document.createElement('a');
+    link.href = url.href;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = label;
+    parent.append(link);
+  } catch (_) { /* Missing or invalid source URLs remain plain text */ }
+}
+
+function renderDeepDivePlaces(report) {
+  const places = report.places;
+  const parent = $('deep-dive-places-list');
+  const evidence = $('deep-dive-places-evidence');
+  parent.replaceChildren();
+  evidence.replaceChildren();
+  const sites = Array.isArray(places?.sites) ? places.sites.filter(validPlaceLocation).slice(0, 9) : [];
+  const status = places?.status;
+  $('deep-dive-places-status').textContent = !places ? 'Earlier report'
+    : ({available: 'Mapped places', partial: 'Partial analysis', unavailable: 'Mapping unavailable', no_signal: 'No limiting comparison'})[status] || 'Mapping incomplete';
+  $('deep-dive-places-summary').textContent = !places
+    ? 'Specific places were not included in this saved report — run a new Deep Dive to investigate roads, buildings and terrain'
+    : status === 'unavailable' && !sites.length
+    ? 'Mapped places could not be evaluated, so no conclusion can be drawn about individual roads or buildings'
+    : status === 'no_signal' && !sites.length
+    ? 'No relevant negative model comparison stood out among the evaluated places; this does not establish that these places are free of habitat pressures'
+    : places.summary || 'Named places with surrounding conditions worth checking in the field';
+  const areas = Array.isArray(places?.searched_areas) ? places.searched_areas.filter(validPlaceLocation) : [];
+  const radii = [...new Set(areas.filter(area => Number.isFinite(area.radius_m)).map(area => area.radius_m / 1000))];
+  const size = radii.length === 1 ? `${radii[0]} km radius ` : '';
+  $('deep-dive-places-coverage').textContent = places
+    ? `${areas.length} selected ${size}neighborhood${areas.length === 1 ? '' : 's'} for search · ${places.mapped_features ?? 0} mapped features · ${places.assessed_features ?? 0} evaluated` +
+      (places.failed_evaluations ? ` · ${places.failed_evaluations} evaluations failed` : '') +
+      ' · Coverage is limited to these neighborhoods, rather than the full study area'
+    : '';
+  $('deep-dive-places-map-key').hidden = !sites.length;
+  sites.forEach((site, index) => {
+    const rank = index + 1;
+    const card = document.createElement('article');
+    card.className = 'place-card';
+    const head = document.createElement('div');
+    head.className = 'place-card-heading';
+    const focus = document.createElement('button');
+    focus.type = 'button';
+    focus.className = 'place-focus';
+    focus.setAttribute('aria-label', `Show P${rank}: ${site.name || placeLabel(site)} on the map`);
+    const badge = document.createElement('span');
+    badge.className = 'place-rank';
+    badge.textContent = `P${rank}`;
+    const title = document.createElement('strong');
+    title.textContent = site.name || `Mapped ${placeLabel(site).toLowerCase()}`;
+    focus.append(badge, title);
+    focus.addEventListener('click', () => focusDeepDivePlace(site));
+    const kind = document.createElement('span');
+    kind.className = `place-type ${['road', 'building', 'habitat'].includes(site.kind) ? site.kind : ''}`;
+    kind.textContent = placeLabel(site);
+    head.append(focus, kind);
+    const signals = (Array.isArray(site.signals) ? site.signals : []).filter(signal =>
+      signal && typeof signal.feature === 'string' && Number.isFinite(signal.effect) && signal.effect < 0 &&
+      Number.isFinite(signal.current) && Number.isFinite(signal.reference));
+    const strongest = [...signals].sort((a, b) => a.effect - b.effect)[0];
+    const comparison = document.createElement('p');
+    comparison.className = 'place-comparison';
+    comparison.textContent = strongest
+      ? `−${(-strongest.effect * 100).toFixed(1)} score points · strongest condition comparison`
+      : 'Condition comparisons unavailable';
+    const caption = document.createElement('p');
+    caption.className = 'place-caption';
+    caption.textContent = strongest ? friendlyFeature(strongest.feature) : 'The score describes conditions around this location';
+    if (Number.isFinite(site.percentile)) caption.textContent += ` · ${ordinal(site.percentile)} habitat percentile`;
+    const details = document.createElement('details');
+    details.className = 'place-evidence';
+    const summary = document.createElement('summary');
+    summary.textContent = 'Evidence and field checks';
+    const body = document.createElement('div');
+    body.className = 'place-evidence-body';
+    const sizeScope = site.size_scope === 'within_inspected_area' ? ' within inspected area' : '';
+    if (Number.isFinite(site.length_m)) researchRow(body, `Mapped road length${sizeScope}`, `${Math.round(site.length_m).toLocaleString()} m`);
+    if (Number.isFinite(site.area_m2)) researchRow(body, `Mapped footprint${sizeScope}`, `${Math.round(site.area_m2).toLocaleString()} m²`);
+    for (const signal of signals) researchRow(body, friendlyFeature(signal.feature),
+      `Here: ${featureValue(signal.feature, signal.current)} · typical: ${featureValue(signal.feature, signal.reference)} · comparison: −${(-signal.effect * 100).toFixed(1)} score points`);
+    if (site.nearby_habitat && Number.isFinite(site.nearby_habitat.distance_m) && Number.isFinite(site.nearby_habitat.percentile)) {
+      researchRow(body, 'Nearby habitat sample', `${ordinal(site.nearby_habitat.percentile)} percentile · ${Math.round(site.nearby_habitat.distance_m).toLocaleString()} m away, without confirming habitat between the locations`);
+    }
+    const checks = document.createElement('ul');
+    checks.className = 'place-checks';
+    for (const check of Array.isArray(site.field_checks) ? site.field_checks : []) {
+      if (typeof check !== 'string') continue;
+      const item = document.createElement('li');
+      item.textContent = uiPhrase(check);
+      checks.append(item);
+    }
+    if (checks.children.length) body.append(checks);
+    const location = document.createElement('p');
+    location.className = 'place-location';
+    location.textContent = coords(site.latitude, site.longitude);
+    body.append(location);
+    placeSourceLink(body, `View source${site.source ? ` in ${site.source}` : ''} ↗`, site.source_url);
+    details.append(summary, body);
+    card.append(head, comparison, caption, details);
+    parent.append(card);
+  });
+  const paragraphs = places
+    ? [places.method, places.limitations, ...(Array.isArray(places.warnings) ? places.warnings : [])]
+    : ['Run a new report to retrieve real mapped features and compare the habitat conditions around selected locations'];
+  for (const value of paragraphs) {
+    if (typeof value !== 'string' || !value) continue;
+    const p = document.createElement('p');
+    p.textContent = value;
+    evidence.append(p);
+  }
+  const note = document.createElement('p');
+  note.textContent = 'Places are ranked by their strongest relevant negative model comparison, rather than a sum of effects or proof that a structure caused damage. Missing mapping does not mean roads, buildings or pressures are absent.';
+  evidence.append(note);
+  const sources = document.createElement('div');
+  sources.className = 'place-sources';
+  for (const source of Array.isArray(places?.sources) ? places.sources : []) {
+    if (!source || typeof source !== 'object') continue;
+    const row = document.createElement('div');
+    row.className = 'place-source';
+    placeSourceLink(row, source.name || 'Mapping source', source.url);
+    const metadata = [source.attribution, source.data_timestamp ? `Map data timestamp: ${source.data_timestamp}` : '', source.coverage]
+      .filter(value => typeof value === 'string' && value);
+    if (metadata.length) {
+      const p = document.createElement('p');
+      p.textContent = metadata.join(' · ');
+      row.append(p);
+    }
+    if (row.children.length) sources.append(row);
+  }
+  if (sources.children.length) evidence.append(sources);
+  if (typeof places?.retrieved_at === 'string') {
+    const retrieved = new Date(places.retrieved_at);
+    if (Number.isFinite(retrieved.getTime())) {
+      const p = document.createElement('p');
+      p.textContent = `Mapping retrieved ${retrieved.toLocaleString()}`;
+      evidence.append(p);
+    }
+  }
+}
+
+function validPlaceGeometry(geometry) {
+  const depths = {Point: 0, LineString: 1, MultiLineString: 2, Polygon: 2, MultiPolygon: 3};
+  if (!geometry || !Object.hasOwn(depths, geometry.type)) return false;
+  let count = 0;
+  const check = (values, depth) => Array.isArray(values) && values.length > 0 && (depth
+    ? values.every(value => check(value, depth - 1))
+    : ++count <= 3000 && values.length >= 2 && Number.isFinite(values[0]) && Math.abs(values[0]) <= 180 && Number.isFinite(values[1]) && Math.abs(values[1]) <= 90);
+  return check(geometry.coordinates, depths[geometry.type]);
+}
+
+function drawDeepDivePlaces(report) {
+  const sites = Array.isArray(report.places?.sites) ? report.places.sites.filter(validPlaceLocation).slice(0, 9) : [];
+  sites.forEach((site, index) => {
+    const rank = index + 1;
+    const color = ({road: '#8a6846', building: '#786780', habitat: '#637e59'})[site.kind] || '#786b59';
+    const popup = document.createElement('div');
+    const name = site.name || placeLabel(site);
+    popup.textContent = `P${rank} · ${name}${Number.isFinite(site.percentile) ? ` · ${ordinal(site.percentile)} habitat percentile` : ''}`;
+    let geometry = null;
+    if (typeof L.geoJSON === 'function' && site.geometry?.type !== 'Point' && validPlaceGeometry(site.geometry)) {
+      try {
+        geometry = L.geoJSON(site.geometry, {style: {color, weight: site.kind === 'road' ? 3 : 2, opacity: .82, fillColor: color, fillOpacity: .16}})
+          .bindPopup(popup.cloneNode(true)).addTo(deepDiveOverlay);
+      } catch (_) { /* A malformed footprint must not hide the report */ }
+    }
+    const marker = L.marker([site.latitude, site.longitude], {
+      icon: L.divIcon({className: 'place-rank-marker', html: `P${rank}`, iconSize: [32, 26], iconAnchor: [16, 13]}),
+      title: `Place P${rank}: ${name}`,
+    }).bindPopup(popup).addTo(deepDiveOverlay);
+    deepDivePlaceLayers.set(site.id, {geometry, marker});
+  });
+}
+
+function focusDeepDivePlace(site) {
+  if (!deepDiveMap) return;
+  const layers = deepDivePlaceLayers.get(site.id);
+  const bounds = layers?.geometry?.getBounds?.();
+  if (bounds?.isValid?.()) deepDiveMap.fitBounds(bounds, {padding: [42, 42], maxZoom: 16, animate: false});
+  else deepDiveMap.setView([site.latitude, site.longitude], 16, {animate: false});
+  layers?.marker?.openPopup();
+  $('deep-dive-map').scrollIntoView({behavior: scrollBehavior(), block: 'center'});
+}
+
+function renderDeepDiveSignal(parent, row) {
+  const effect = row.mean_effect;
+  const comparison = Number.isFinite(row.mean_current) && Number.isFinite(row.mean_reference)
+    ? ` · Sample average: ${featureValue(row.feature, row.mean_current)} · typical: ${featureValue(row.feature, row.mean_reference)}` : '';
+  researchRow(parent, friendlyFeature(row.feature),
+    `${effect > 0 ? 'Supports' : 'Limits'} the score at ${row.affected_points} of ${row.points_evaluated} explained samples${comparison} · ` +
+    `Average effect: ${effect > 0 ? '+' : ''}${(effect * 100).toFixed(1)} score points on a 0–100 scale`);
+}
+
+function renderDeepDiveDistribution(report) {
+  const distribution = $('deep-dive-distribution');
+  distribution.replaceChildren();
+  for (const item of report.distribution || []) {
+    const row = document.createElement('div');
+    row.className = 'distribution-row';
+    const heading = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = item.category;
+    const caption = document.createElement('span');
+    caption.textContent = `${item.count} samples · ${Math.round(item.percentage)}%`;
+    heading.append(title, caption);
+    const track = document.createElement('div');
+    track.className = 'distribution-track';
+    const bar = document.createElement('span');
+    bar.className = 'distribution-bar';
+    bar.style.width = `${Math.max(0, Math.min(100, item.percentage))}%`;
+    const index = ['very low', 'low', 'moderate', 'high', 'very high'].indexOf(item.category.toLowerCase());
+    bar.style.background = colors[index] || '#858585';
+    track.append(bar);
+    row.append(heading, track);
+    distribution.append(row);
+  }
+  if (!distribution.children.length) researchRow(distribution, 'Distribution unavailable',
+    report.overview?.evaluated_points ? 'This saved report does not include the sample distribution' : 'There are no evaluated samples to compare');
+
+  const sectors = $('deep-dive-sectors');
+  sectors.replaceChildren();
+  for (const item of report.sectors || []) {
+    const row = document.createElement('div');
+    row.className = 'sector-row';
+    const heading = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = item.name;
+    const caption = document.createElement('span');
+    caption.textContent = `${ordinal(item.mean_percentile)} mean percentile · ${item.points} samples`;
+    heading.append(title, caption);
+    const track = document.createElement('div');
+    track.className = 'sector-track';
+    const bar = document.createElement('span');
+    bar.className = 'sector-bar';
+    bar.style.width = `${Math.max(0, Math.min(100, item.mean_percentile))}%`;
+    track.append(bar);
+    row.append(heading, track);
+    sectors.append(row);
+  }
+  if (!sectors.children.length) researchRow(sectors, 'Directional comparison unavailable', 'Usable samples in each direction are needed to compare the landscape');
+}
+
+function renderDeepDiveSurvey(report) {
+  const parent = $('deep-dive-survey-list');
+  parent.replaceChildren();
+  for (const point of report.survey_priorities || []) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'survey-sample';
+    const title = document.createElement('strong');
+    title.textContent = `${point.rank}. ${ordinal(point.percentile)} percentile · ${point.category}`;
+    const detail = document.createElement('span');
+    detail.textContent = `${point.sector} · ${point.distance_km.toFixed(1)} km from center`;
+    const location = document.createElement('span');
+    location.textContent = `${coords(point.latitude, point.longitude)} · Locate on map ↗`;
+    button.append(title, detail, location);
+    button.addEventListener('click', () => {
+      if (!deepDiveMap) return;
+      deepDiveMap.setView([point.latitude, point.longitude], 13);
+      deepDiveSampleMarkers.get(`${point.latitude},${point.longitude}`)?.openPopup();
+      $('deep-dive-map').scrollIntoView({behavior: scrollBehavior(), block: 'center'});
+    });
+    parent.append(button);
+  }
+  if (!parent.children.length) researchRow(parent, 'No field shortlist available', 'Usable ranked samples are needed to identify locations to investigate');
+}
+
+function renderDeepDiveEvidence(report) {
+  const parent = $('deep-dive-evidence-stats');
+  parent.replaceChildren();
+  const e = report.evidence;
+  if (!e) {
+    $('deep-dive-evidence-copy').textContent = 'Validation metadata is unavailable in this saved report, and its percentiles compare the fitted model’s reference locations rather than estimate confidence.';
+    $('deep-dive-evidence-sources').textContent = '';
+    return;
+  }
+  parent.append(reviewStat('Recorded sightings', Number(e.presence_count).toLocaleString()),
+    reviewStat('Background locations', Number(e.background_count).toLocaleString()), validationHelp(e, report.model));
+  $('deep-dive-evidence-copy').textContent = 'The model learns from sightings and environmental data, with performance checked on locations left out of training.';
+  $('deep-dive-evidence-sources').textContent = (e.sources || []).join(' · ');
 }
 
 function setDeepDiveBusy(value) {
@@ -855,22 +1230,30 @@ function setDeepDiveBusy(value) {
   $('deep-dive-cancel').disabled = !value || !deepDiveJobId;
   $('train-species-nav').disabled = value || busy;
   $('models-nav').disabled = value || busy;
+  $('analyze').disabled = value || busy || !$('species').value;
+  $('deep-dive-launch').disabled = value;
+  $('deep-dive-export').disabled = value || !deepDiveResult;
+  $('deep-dive-print').disabled = value || !deepDiveResult;
   if (deepDiveStageTimer) clearInterval(deepDiveStageTimer);
   deepDiveStageTimer = null;
   if (value) {
-    const stages = [
-      'Sampling habitat…',
-      'Evaluating model signals…',
-      'Finding strengths and weaknesses…',
-      'Building results…',
-    ];
-    let index = 0;
-    $('deep-dive-loading-stage').textContent = stages[index];
-    deepDiveStageTimer = setInterval(() => {
-      index = Math.min(index + 1, stages.length - 1);
-      $('deep-dive-loading-stage').textContent = stages[index];
-    }, 1700);
+    deepDiveStarted = Date.now();
+    const updateElapsed = () => {
+      const seconds = Math.floor((Date.now() - deepDiveStarted) / 1000);
+      const elapsed = seconds < 60 ? `${seconds}s elapsed` : `${Math.floor(seconds / 60)}m ${seconds % 60}s elapsed`;
+      $('deep-dive-loading-stage').textContent = `Checking habitat across this area · ${elapsed}`;
+    };
+    updateElapsed();
+    deepDiveStageTimer = setInterval(updateElapsed, 1000);
   }
+}
+
+function deepDiveError(message) {
+  setDeepDiveBusy(false);
+  $('deep-dive-loading').hidden = true;
+  $('deep-dive-error').textContent = uiPhrase(message);
+  $('deep-dive-error').hidden = false;
+  $('deep-dive-retry').hidden = false;
 }
 
 async function pollDeepDive(id, version) {
@@ -886,30 +1269,28 @@ async function pollDeepDive(id, version) {
     if (job.status === 'complete') {
       renderDeepDive(job.result);
     } else if (job.status === 'cancelled') {
-      $('deep-dive-loading').hidden = true;
-      $('deep-dive-error').textContent = 'Deep Dive cancelled. Your original habitat assessment is unchanged.';
-      $('deep-dive-error').hidden = false;
+      deepDiveError('Deep Dive cancelled — your habitat assessment is still available');
     } else {
-      $('deep-dive-loading').hidden = true;
-      $('deep-dive-error').textContent = job.error || 'The Deep Dive could not be completed.';
-      $('deep-dive-error').hidden = false;
+      deepDiveError(job.error || 'Check your model and environmental datasets, then retry the Deep Dive');
     }
   } catch (exc) {
     if (deepDiveJobId !== id || deepDiveRevision !== version) return;
     if (exc.status && exc.status < 500) {
-      setDeepDiveBusy(false);
-      $('deep-dive-loading').hidden = true;
-      $('deep-dive-error').textContent = exc.message;
-      $('deep-dive-error').hidden = false;
+      deepDiveError(exc.message);
       return;
     }
-    $('deep-dive-loading-stage').textContent = 'Connection interrupted. Retrying the Deep Dive…';
+    $('deep-dive-loading-stage').textContent = 'Connection interrupted — retrying the Deep Dive…';
     setTimeout(() => pollDeepDive(id, version), 2000);
   }
 }
 
 async function startDeepDive() {
   if (!result || deepDiveBusy) return;
+  if (deepDiveResult && deepDiveSource === result) {
+    showSection('deep-dive');
+    renderDeepDive(deepDiveResult);
+    return;
+  }
   const radius = result.analysis_type === 'regional' ? result.radius_km : 10;
   const request = {
     species: result.species,
@@ -922,49 +1303,134 @@ async function startDeepDive() {
   deepDiveRevision += 1;
   const version = deepDiveRevision;
   deepDiveJobId = null;
+  deepDiveResult = null;
+  deepDiveSource = result;
   $('deep-dive-content').hidden = true;
   $('deep-dive-error').hidden = true;
-  $('deep-dive-title').textContent = `${result.species} · Deep Dive`;
+  $('deep-dive-retry').hidden = true;
+  $('deep-dive-title').textContent = `${result.species} habitat`;
   $('deep-dive-meta').textContent =
     `${radius} km · ${result.analysis_type === 'regional' ? 'regional' : 'point'} analysis`;
+  $('deep-dive-summary').textContent = 'Checking habitat across this area';
+  $('deep-dive-demo-note').hidden = !result.recorded_at;
+  $('deep-dive-demo-note').textContent = result.recorded_at
+    ? 'The example assessment was recorded, while this Deep Dive runs a new live analysis using your local environmental data and current model' : '';
   showSection('deep-dive');
   setDeepDiveBusy(true);
 
   try {
     const job = await api('/api/deep-dives', request);
+    if (deepDiveRevision !== version) return;
     deepDiveJobId = job.id;
     $('deep-dive-cancel').disabled = false;
     pollDeepDive(job.id, version);
   } catch (exc) {
-    setDeepDiveBusy(false);
-    $('deep-dive-loading').hidden = true;
-    $('deep-dive-error').textContent = exc.message;
-    $('deep-dive-error').hidden = false;
+    if (deepDiveRevision !== version) return;
+    deepDiveError(exc.message);
   }
 }
 
 async function cancelDeepDive() {
   if (!deepDiveJobId || !deepDiveBusy) return;
   const id = deepDiveJobId;
+  const version = ++deepDiveRevision;
   $('deep-dive-cancel').disabled = true;
   try {
     await api(`/api/deep-dives/${id}/cancel`, {});
-    if (deepDiveJobId !== id) return;
-    deepDiveRevision += 1;
-    setDeepDiveBusy(false);
-    $('deep-dive-loading').hidden = true;
-    $('deep-dive-error').textContent = 'Deep Dive cancelled. Your original habitat assessment is unchanged.';
-    $('deep-dive-error').hidden = false;
+    if (deepDiveJobId !== id || deepDiveRevision !== version) return;
+    deepDiveJobId = null;
+    deepDiveError('Deep Dive cancelled — your habitat assessment is still available');
   } catch (exc) {
-    $('deep-dive-error').textContent = `Could not cancel: ${exc.message}`;
+    if (deepDiveJobId !== id || deepDiveRevision !== version) return;
+    $('deep-dive-error').textContent = uiPhrase(`Could not cancel: ${exc.message}`);
     $('deep-dive-error').hidden = false;
     $('deep-dive-cancel').disabled = false;
+    pollDeepDive(id, version);
   }
 }
 
 $('deep-dive-launch').addEventListener('click', startDeepDive);
 $('deep-dive-back').addEventListener('click', () => showSection('explore'));
 $('deep-dive-cancel').addEventListener('click', cancelDeepDive);
+$('deep-dive-retry').addEventListener('click', startDeepDive);
+$('deep-dive-print').addEventListener('click', () => deepDiveResult && printCurrentReport('deep-dive-content', 'deep-dive-print'));
+
+async function printCurrentReport(section, buttonId) {
+  const button = $(buttonId);
+  const label = button.textContent;
+  const isDeepDive = section === 'deep-dive-content';
+  const page = $(isDeepDive ? 'deep-dive-page' : 'explore-page');
+  const report = isDeepDive ? deepDiveResult : result;
+  const closed = [...document.querySelectorAll(`#${section} details:not([open])`)];
+  closed.forEach(detail => { detail.open = true; });
+  button.disabled = true;
+  button.textContent = 'Preparing print…';
+  document.body.classList.toggle('preparing-print', true);
+  try {
+    preparePrintMaps();
+    await waitForMapTiles(isDeepDive ? deepDiveMap : map);
+    if (!page.hidden && !$(section).hidden && !$('app-shell').hidden &&
+      report === (isDeepDive ? deepDiveResult : result)) window.print();
+  } finally {
+    document.body.classList.toggle('preparing-print', false);
+    restorePrintMaps();
+    closed.forEach(detail => { detail.open = false; });
+    button.textContent = label;
+    button.disabled = false;
+  }
+}
+
+function waitForMapTiles(view) {
+  const pending = [];
+  view?.eachLayer?.(layer => {
+    if (!layer.isLoading?.()) return;
+    pending.push(new Promise(resolve => {
+      let timer;
+      const done = () => {
+        layer.off('load', done);
+        clearTimeout(timer);
+        resolve();
+      };
+      layer.once('load', done);
+      timer = setTimeout(done, 4000);
+    }));
+  });
+  return Promise.all(pending);
+}
+
+function preparePrintMaps() {
+  if (printMapViews) return;
+  printMapViews = [];
+  for (const [view, page, bounds] of [
+    [map, 'explore-page', null],
+    [deepDiveMap, 'deep-dive-page', deepDiveBounds],
+  ]) {
+    if (!view || $(page).hidden) continue;
+    view.stop?.();
+    const center = view.getCenter();
+    const zoom = view.getZoom();
+    printMapViews.push({view, center, zoom});
+    view.invalidateSize({pan: false, animate: false});
+    if (bounds) view.fitBounds(bounds, {padding: [18, 18], animate: false});
+    else view.setView(center, zoom, {animate: false});
+  }
+}
+
+function restorePrintMaps() {
+  for (const {view, center, zoom} of printMapViews || []) {
+    view.stop?.();
+    view.invalidateSize({pan: false, animate: false});
+    view.setView(center, zoom, {animate: false});
+  }
+  printMapViews = null;
+}
+
+window.addEventListener?.('beforeprint', preparePrintMaps);
+window.addEventListener?.('afterprint', () => setTimeout(restorePrintMaps, 0));
+$('deep-dive-export').addEventListener('click', () => {
+  if (!deepDiveResult) return;
+  downloadReport(deepDiveResult, 'deep-dive');
+});
 async function poll(id, version) {
   if (activeJob !== id || revision !== version) return;
   try {
@@ -980,10 +1446,10 @@ async function poll(id, version) {
     if (job.status === 'complete') {
       showResult(job.result);
     } else if (job.status === 'cancelled') {
-      $('status').textContent = 'Analysis cancelled. Ready when you are.';
+      $('status').textContent = 'Analysis cancelled — ready when you are';
     } else {
-      error(job.error || 'Analysis unavailable.');
-      $('status').textContent = 'Analysis unavailable.';
+      error(job.error || 'Analysis unavailable');
+      $('status').textContent = 'Analysis unavailable';
     }
   } catch (exc) {
     if (activeJob !== id || revision !== version) return;
@@ -991,10 +1457,10 @@ async function poll(id, version) {
       activeJob = null;
       setBusy(false);
       error(exc.message);
-      $('status').textContent = 'Analysis unavailable. Reload if the server restarted.';
+      $('status').textContent = 'Analysis unavailable — reload if the server restarted';
       return;
     }
-    error('Connection interrupted. Retrying; you can still cancel the analysis.');
+    error('Retrying after a connection interruption — you can still cancel the analysis');
     setTimeout(() => poll(id, version), 2000);
   }
 }
@@ -1022,7 +1488,7 @@ $('analysis-form').addEventListener('submit', async event => {
   } catch (exc) {
     setBusy(false);
     error(exc.message);
-    $('status').textContent = 'Could not start analysis.';
+    $('status').textContent = 'Could not start analysis';
   }
 });
 
@@ -1038,7 +1504,7 @@ $('cancel').addEventListener('click', async () => {
     activeJob = null;
     setBusy(false);
     error('');
-    $('status').textContent = 'Analysis cancelled. Ready when you are.';
+    $('status').textContent = 'Analysis cancelled — ready when you are';
   } catch (exc) {
     error(`Could not cancel: ${exc.message}`);
     if (activeJob === id) {
@@ -1048,10 +1514,9 @@ $('cancel').addEventListener('click', async () => {
   }
 });
 
-$('export').addEventListener('click', () => {
-  if (!result) return;
+function downloadReport(report, kind = 'assessment') {
   const payload = {
-    ...result,
+    ...report,
     note: 'Suitability is relative, not a probability of species presence.',
   };
   const url = URL.createObjectURL(
@@ -1060,10 +1525,11 @@ $('export').addEventListener('click', () => {
   const link = document.createElement('a');
   link.href = url;
   link.download =
-    `wild-locate-${result.species.toLowerCase().replaceAll(' ', '-')}.json`;
+    `wild-locate-${report.species.toLowerCase().replaceAll(' ', '-')}-${kind}.json`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-});
+}
+$('export').addEventListener('click', () => { if (result) downloadReport(result); });
 
 $('point-mode').addEventListener('click', () => mode(false));
 $('area-mode').addEventListener('click', () => mode(true));
@@ -1089,24 +1555,26 @@ function showSection(section, focus = null) {
   $('explore-nav').setAttribute('aria-current', studio ? 'false' : 'page');
   $('train-species-nav').setAttribute('aria-current', studio && focus !== 'models' ? 'page' : 'false');
   $('models-nav').setAttribute('aria-current', studio && focus === 'models' ? 'page' : 'false');
+  const heading = $(deepDive ? 'deep-dive-title' : studio ? 'species-heading' : 'explore-heading');
+  heading?.focus({preventScroll: true});
 
   if (deepDive) {
     setTimeout(() => {
       initDeepDiveMap();
       if (deepDiveMap) deepDiveMap.invalidateSize({pan: false});
     }, 0);
-    window.scrollTo({top: 0, behavior: 'smooth'});
+    window.scrollTo({top: 0, behavior: scrollBehavior()});
     return;
   }
 
   if (!studio) {
     setTimeout(() => map && map.invalidateSize({pan: false}), 0);
-    window.scrollTo({top: 0, behavior: 'smooth'});
+    window.scrollTo({top: 0, behavior: scrollBehavior()});
     return;
   }
 
   if (focus === 'models') {
-    setTimeout(() => $('model-library').scrollIntoView({behavior: 'smooth', block: 'start'}), 0);
+    setTimeout(() => $('model-library').scrollIntoView({behavior: scrollBehavior(), block: 'start'}), 0);
   } else {
     setTimeout(() => $('training-query').focus(), 0);
   }
@@ -1133,8 +1601,8 @@ function renderModelReview() {
     const p = document.createElement('p');
     p.className = 'hint';
     p.textContent = modelRecords.length
-      ? 'Choose a model to inspect its validation summary.'
-      : 'Train a species to create your first custom model.';
+      ? 'Choose a species to review its model'
+      : 'Train a species to save your first model';
     $('review-details').append(p);
     $('enable-model').disabled = true;
     $('retrain-model').disabled = true;
@@ -1144,36 +1612,32 @@ function renderModelReview() {
 
   $('review-species').textContent = record.species;
   if (record.ready === false) {
-    $('model-message').textContent = record.reason || 'This artifact is unavailable. Retrain it before use.';
+    $('model-message').textContent = uiPhrase(record.reason || 'Train this model again to use it on this computer');
     $('model-message').hidden = false;
   }
   $('review-details').append(
-    reviewStat('Source', record.source),
-    reviewStat('Status', record.ready === false ? 'Unavailable in this runtime' : (record.enabled ? 'Enabled' : (record.custom ? 'Ready for review' : 'Available')))
+    reviewStat('Model', record.custom ? 'Trained by you' : 'Included with Wild-Locate'),
+    reviewStat('Status', record.ready === false ? 'Needs retraining' : (record.enabled ? 'In use' : (record.custom ? 'Ready for review' : 'Available')))
   );
 
   if (!record.details_error) {
     $('review-details').append(
-      reviewStat('Selected model', record.model || '—'),
       reviewStat(
-        'Training locations',
-        `${Number(record.presence_count || 0).toLocaleString()} observations + ${Number(record.background_count || 0).toLocaleString()} background`
+        'Recorded sightings',
+        Number(record.presence_count || 0).toLocaleString()
       ),
-      reviewStat('Spatial validation', record.folds ? `${record.folds} folds` : '—'),
-      reviewStat('Mean ROC-AUC', Number.isFinite(record.roc_auc) ? record.roc_auc.toFixed(3) : '—'),
-      reviewStat('Mean PR-AUC', Number.isFinite(record.pr_auc) ? record.pr_auc.toFixed(3) : '—'),
-      reviewStat('PR reference', Number.isFinite(record.pr_reference) ? record.pr_reference.toFixed(3) : '—')
+      validationHelp(record, record.model)
     );
     const note = document.createElement('p');
     note.className = 'review-note';
     note.textContent = record.experimental
-      ? 'Validation did not consistently outperform the simple references. Treat this model as experimental.'
-      : 'ROC-AUC measures separation from background. PR-AUC summarizes precision and recall and depends on sampling balance; neither metric establishes presence probability.';
+      ? 'Treat these results cautiously because the model did not consistently beat the simple reference checks'
+      : 'Check the results in the field before relying on this model';
     $('review-details').append(note);
   } else {
     const note = document.createElement('p');
     note.className = 'review-note';
-    note.textContent = 'Validation details are unavailable. Check the saved model files.';
+    note.textContent = 'Validation details are unavailable — check the saved model files';
     $('review-details').append(note);
   }
 
@@ -1194,12 +1658,12 @@ function renderModels(selectId = null) {
     const row = document.createElement('button');
     row.type = 'button';
     row.className = 'model-row';
-    row.setAttribute('aria-selected', String(record.id === selectedModelId));
+    row.setAttribute('aria-pressed', String(record.id === selectedModelId));
     const name = document.createElement('strong');
     name.textContent = record.species;
     const meta = document.createElement('span');
     const status = record.ready === false ? 'Unavailable · retrain to restore' : record.enabled
-      ? 'Enabled'
+      ? 'In use'
       : (record.custom ? 'Ready for review' : 'Available');
     const created = record.created_at
       ? ` · ${record.created_at.slice(0, 10)}`
@@ -1225,7 +1689,7 @@ async function loadModels(selectId = null) {
     modelRecords = [];
     selectedModelId = null;
     renderModels();
-    $('model-message').textContent = exc.message;
+    $('model-message').textContent = uiPhrase(exc.message);
     $('model-message').hidden = false;
   }
 }
@@ -1234,7 +1698,7 @@ async function openSpeciesStudio(focus = 'train') {
   if (!config?.authenticated) {
     setAuthMode(false);
     showAuth();
-    $('auth-copy').textContent = 'Sign in to train species and manage your private model library. Habitat exploration is available without an account.';
+    $('auth-copy').textContent = 'Sign in to train a species or manage your saved models';
     return;
   }
   if (busy || deepDiveBusy) return;
@@ -1247,7 +1711,7 @@ async function openSpeciesStudio(focus = 'train') {
 
   const state = config.regions.find(item => item.code === managerRegion);
   $('manager-subtitle').textContent =
-    `${state?.name || managerRegion} · models and training use the selected region's environmental data.`;
+    `${state?.name || managerRegion} species models`;
 
   if (!trainingJobId || trainingState?.status === 'completed' || trainingState?.status === 'cancelled') {
     resetTrainingUi();
@@ -1272,7 +1736,7 @@ $('species-region').addEventListener('change', async () => {
   managerRegion = $('species-region').value;
   const state = config.regions.find(item => item.code === managerRegion);
   $('manager-subtitle').textContent =
-    `${state?.name || managerRegion} · models and training use the selected region's environmental data.`;
+    `${state?.name || managerRegion} species models`;
   resetTrainingUi();
   await loadModels();
 });
@@ -1285,10 +1749,10 @@ $('enable-model').addEventListener('click', async () => {
     await refreshConfig(true);
     await loadModels(record.id);
     $('model-message').textContent =
-      `${record.species} is now available in the analysis dropdown.`;
+      `${record.species} is ready to use in Explore`;
     $('model-message').hidden = false;
   } catch (exc) {
-    $('model-message').textContent = exc.message;
+    $('model-message').textContent = uiPhrase(exc.message);
     $('model-message').hidden = false;
   }
 });
@@ -1304,7 +1768,7 @@ $('delete-model').addEventListener('click', async () => {
     await refreshConfig(true);
     await loadModels();
   } catch (exc) {
-    $('model-message').textContent = exc.message;
+    $('model-message').textContent = uiPhrase(exc.message);
     $('model-message').hidden = false;
   }
 });
@@ -1333,9 +1797,9 @@ function resetTrainingUi() {
   $('download-environment').hidden = true;
   $('start-training').hidden = true;
   $('cancel-training').hidden = true;
-  $('training-status').textContent = 'Choose a species to begin.';
+  $('training-status').textContent = 'Choose a species to begin';
   $('training-summary').textContent =
-    'Training needs at least 25 cleaned observations and uses spatial cross-validation.';
+    'At least 25 usable wildlife sightings are needed';
   $('training-error').hidden = true;
   $('training-log').hidden = true;
   $('training-log-text').textContent = '';
@@ -1359,14 +1823,20 @@ async function handleTrainingCompletion(job) {
   await refreshConfig(true);
   await loadModels(modelId);
   $('model-message').textContent =
-    'Training complete. Review the validation results, then enable the model when ready.';
+    'Review your new model, then choose whether to use it for habitat analysis';
   $('model-message').hidden = false;
-  $('model-library').scrollIntoView({behavior: 'smooth', block: 'start'});
+  $('model-library').scrollIntoView({behavior: scrollBehavior(), block: 'start'});
 }
 
 function renderTraining(job) {
   trainingState = job;
-  $('training-status').textContent = job.message || 'Working…';
+  $('training-status').textContent = uiPhrase((job.message || 'Working…')
+    .replace('Extracting environmental features', 'Reading habitat data')
+    .replace(/^Evaluating .+: spatial fold (\d+) of (\d+)/, 'Checking the model · group $1 of $2')
+    .replace('Evaluating candidate models using five spatial folds', 'Training and checking the model')
+    .replace(/^Fitting the selected .+ model on all training locations/, 'Finishing the model')
+    .replace('Downloading research-grade', 'Downloading verified')
+    .replace('Checking the completed model and saving it for review', 'Checking and saving your model'));
   $('training-error').hidden = true;
 
   const logs = job.logs || [];
@@ -1393,21 +1863,21 @@ function renderTraining(job) {
   } else if (job.status === 'prepared') {
     $('training-match').hidden = false;
     $('training-summary').textContent =
-      `${Number(job.result.cleaned_count).toLocaleString()} usable observations from ${Number(job.result.raw_count).toLocaleString()} downloaded records. Environmental data is available; spatial coverage will be checked during training.`;
+      `${Number(job.result.cleaned_count).toLocaleString()} usable sightings from ${Number(job.result.raw_count).toLocaleString()} downloaded records · Ready to train`;
     $('start-training').hidden = false;
   } else if (job.status === 'initialized') {
     $('training-summary').textContent =
-      'Environmental datasets are ready. Confirm the species and check its observations again.';
+      'Habitat data is ready — check the species sightings to continue';
     $('prepare-training').hidden = !resolvedTaxon;
   } else if (job.status === 'completed') {
     $('training-summary').textContent =
-      'Training complete. The model has been saved to your account for review.';
+      'Your model is saved and ready to review';
     handleTrainingCompletion(job);
   } else if (job.status === 'cancelled') {
     $('training-summary').textContent =
-      'Training cancelled. Your enabled models were not changed.';
+      'Training cancelled';
   } else if (job.status === 'error') {
-    $('training-error').textContent = job.error || 'Training failed.';
+    $('training-error').textContent = uiPhrase(job.error || 'Training failed');
     $('training-error').hidden = false;
     if (job.code === 'missing_environment') {
       $('download-environment').hidden = false;
@@ -1429,7 +1899,7 @@ async function pollTraining(id, version) {
   } catch (exc) {
     if (trainingJobId !== id || trainingRevision !== version) return;
     trainingBusy(false);
-    $('training-error').textContent = exc.message;
+    $('training-error').textContent = uiPhrase(exc.message);
     $('training-error').hidden = false;
   }
 }
@@ -1447,9 +1917,9 @@ function renderTrainingSuggestions(data) {
   if (!suggestions.length) {
     clearTrainingSuggestions();
     $('training-error').textContent =
-      `No mammal or reptile species with research-grade observations in ${data.region_name || managerRegion} matched that search.`;
+      `No matching mammals or reptiles have verified sightings in ${data.region_name || managerRegion}`;
     $('training-error').hidden = false;
-    $('training-status').textContent = 'Try a more specific or different animal name.';
+    $('training-status').textContent = 'Try a more specific or different animal name';
     return;
   }
 
@@ -1463,7 +1933,7 @@ function renderTrainingSuggestions(data) {
     const meta = document.createElement('span');
     const groupName = suggestion.iconic_taxon_name === 'Reptilia' ? 'Reptile' : 'Mammal';
     meta.textContent =
-      `${suggestion.scientific_name} · ${groupName} · ${Number(suggestion.observation_count || 0).toLocaleString()} ${data.region_name || managerRegion} observations`;
+      `${suggestion.scientific_name} · ${groupName} · ${Number(suggestion.observation_count || 0).toLocaleString()} sightings in ${data.region_name || managerRegion}`;
 
     button.append(name, meta);
     button.addEventListener('click', async () => {
@@ -1476,7 +1946,7 @@ function renderTrainingSuggestions(data) {
 
   container.hidden = false;
   $('training-status').textContent =
-    `Choose one of the ${suggestions.length} matching species.`;
+    `Choose one of the ${suggestions.length} matching species`;
 }
 
 async function searchTrainingSpecies() {
@@ -1500,9 +1970,9 @@ async function searchTrainingSpecies() {
     });
     renderTrainingSuggestions(data);
   } catch (exc) {
-    $('training-error').textContent = exc.message;
+    $('training-error').textContent = uiPhrase(exc.message);
     $('training-error').hidden = false;
-    $('training-status').textContent = 'Species search failed.';
+    $('training-status').textContent = 'Species search failed';
   } finally {
     $('find-species').disabled = false;
   }
@@ -1530,7 +2000,7 @@ async function startTrainingResolve(queryOverride = null) {
     pollTraining(job.id, version);
   } catch (exc) {
     trainingBusy(false);
-    $('training-error').textContent = exc.message;
+    $('training-error').textContent = uiPhrase(exc.message);
     $('training-error').hidden = false;
   }
 }
@@ -1559,7 +2029,7 @@ async function trainingAction(action) {
     pollTraining(trainingJobId, version);
   } catch (exc) {
     trainingBusy(false);
-    $('training-error').textContent = exc.message;
+    $('training-error').textContent = uiPhrase(exc.message);
     $('training-error').hidden = false;
   }
 }
@@ -1575,7 +2045,7 @@ async function cancelTraining() {
     const job = await api(`/api/training/${trainingJobId}/cancel`, {});
     renderTraining(job);
   } catch (exc) {
-    $('training-error').textContent = exc.message;
+    $('training-error').textContent = uiPhrase(exc.message);
     $('training-error').hidden = false;
   }
 }
@@ -1590,7 +2060,7 @@ async function init() {
     enterApp(false);
   } catch (_) {
     $('auth-screen').hidden = false;
-    authError('Could not connect to Wild-Locate. Check that the terminal server is still running, then reload this page.');
+    authError('Could not connect to Wild-Locate — check that the terminal server is still running, then reload this page');
   }
 }
 
