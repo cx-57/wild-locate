@@ -1,10 +1,12 @@
 # Wild-Locate
 
-Wild-Locate estimates **relative habitat suitability** from wildlife observations and environmental data. It supports point and surrounding-area analysis, local accounts, model training, and both browser and desktop interfaces.
+Wild-Locate estimates **relative habitat suitability** from wildlife observations and environmental data. It supports point and surrounding-area analysis, local species-model training, a browser-based **Deep Dive** into specific mapped places, and a desktop habitat explorer.
 
 The suitability score is relative to a model's comparison locations. It is **not** the probability that a species is present.
 
 ## Install
+
+Requires **Python 3.10+**. An internet connection is needed for initial environmental-data downloads, species training, and uncached online mapping.
 
 ```bash
 python -m venv .venv
@@ -16,35 +18,28 @@ Editable installation is the recommended development setup: changes in the repos
 
 ## Run
 
-Browser app:
-
-```bash
-wildlocate web
-```
-
-If the command is not found, run it directly from the project folder:
-
-```bash
-./.venv/bin/wildlocate web --port 8766
-```
-
-Keep the terminal open while using the app. If that port is already in use,
-open `http://127.0.0.1:8766`, or select another port with `--port`.
-
-Desktop app:
-
-```bash
-wildlocate
-```
-
-Massachusetts environmental data:
+Prepare Massachusetts environmental data before analyzing a location there (one-time setup):
 
 ```bash
 wildlocate init
 wildlocate status
 ```
 
-Florida and Arizona use cached national raster tiles that download as needed.
+Launch the **browser app** (recommended for Deep Dive):
+
+```bash
+wildlocate web
+```
+
+It opens a local browser page at `http://127.0.0.1:8765`. Keep the terminal running. If port 8765 is occupied, use `wildlocate web --port 8766` and open the URL printed in the terminal. If the `wildlocate` command is not found, use `./.venv/bin/wildlocate` from the project directory or activate `.venv` again.
+
+Launch the **desktop app** for point/regional habitat assessments:
+
+```bash
+wildlocate
+```
+
+The browser app allows exploration without signing in; training, enabling, and managing custom models require a local account. Florida and Arizona use separate, experimental raster-based models: **train a model for the chosen state first**. Their uncached environmental raster tiles download on demand.
 
 ## What it does
 
@@ -53,11 +48,12 @@ Florida and Arizona use cached national raster tiles that download as needed.
 - Includes bundled Massachusetts models for Bobcat, Coyote, Fisher, North American River Otter, and Red Fox.
 - Trains custom **mammal and reptile** models from research-grade iNaturalist observations.
 - Uses target-group background observations, environmental feature extraction, and spatial cross-validation.
+- Supports Massachusetts, Florida, and Arizona; five ready-to-use models are bundled for Massachusetts only.
 - Stores custom models and enabled-model choices per local account.
 
-## Deep Dive
+## Deep Dive (browser app)
 
-The initial assessment is deliberately compact: it shows relative suitability (or a short sampled-area summary), the **Open Deep Dive** action, and an optional collapsed section for model explanations, hypothetical scenarios, detailed scores, and validation evidence.
+Deep Dive opens as a separate **page within the app**, not a new browser tab. The initial assessment is deliberately compact: it shows relative suitability (or a short sampled-area summary), the **Open Deep Dive** action, and an optional collapsed section for model explanations, hypothetical scenarios, detailed scores, and validation evidence.
 
 A completed habitat assessment can open a separate Deep Dive for the same landscape. **A point assessment starts Deep Dive across the surrounding 10 km radius**, rather than analyzing only the originally selected coordinate. A regional assessment retains its chosen 10, 25, or 50 km radius. Both transitions disclose their study scope in the interface.
 
@@ -72,7 +68,7 @@ search neighborhoods. Coverage and training/validation evidence are disclosed,
 but regional direction rankings, generic distribution charts, and landscape
 pressure lists are **not** part of the Deep Dive interface.
 
-Reports can be exported as JSON or printed/saved as PDF. Both maps support scrolling and trackpad pinch zoom. Point examples are recorded results; opening Deep Dive runs a fresh analysis with local data.
+In the browser app, both habitat assessments and Deep Dive reports can be exported as JSON or printed/saved as PDF. The desktop app exports habitat assessments as JSON. Both browser maps support scroll-wheel and trackpad pinch zoom. Point examples are recorded results; opening Deep Dive runs a fresh analysis with local data.
 
 These are model interpretations, not proof of ecological causation.
 
@@ -106,6 +102,7 @@ wildlocate/
 │   ├── regional.py        # region definitions + FL/AZ raster features
 │   ├── modeling.py        # dataset construction, CV, training sessions
 │   ├── predict.py         # point/area prediction + request validation
+│   ├── deep_dive.py       # regional samples + Deep Dive report
 │   ├── registry.py        # accounts + bundled/custom model registry
 │   ├── mapped_places.py   # bounded OSM geometry + local MassDOT fallback
 │   ├── place_analysis.py  # actual-place model comparisons and field priorities
@@ -129,7 +126,7 @@ wildlocate/
     └── species.js         # species training
 ```
 
-The desktop and browser interfaces call the same Python prediction and training code. Model logic is not duplicated in JavaScript.
+The desktop and browser interfaces share the same Python prediction and training code. Deep Dive's separate, specific-place report is available in the browser app; its model logic also lives in Python, not JavaScript.
 
 ## Modeling
 
