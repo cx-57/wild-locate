@@ -22,7 +22,7 @@
     <div>
       <span class="eyebrow">YOUR ACCOUNT</span>
       <h1 id="auth-title" tabindex="-1">Welcome back.</h1>
-      <p id="auth-copy">Sign in to train species and keep your saved models</p>
+      <p id="auth-copy">Sign in to explore habitat and access the species models saved to your account.</p>
     </div>
     <form id="auth-form">
       <label for="auth-username">Username</label>
@@ -37,7 +37,7 @@
       <button class="primary" id="auth-submit" type="submit">Sign in <span>→</span></button>
       <button class="text-button auth-switch" id="auth-switch" type="button">New here? Create an account</button>
     </form>
-    <p class="auth-note">Your account and trained models stay on this computer</p>
+    <p class="auth-note">Accounts stay on this computer. Models you train belong to your account. Bundled models and habitat data are shared locally.</p>
     <button id="auth-back" class="text-button" type="button">Explore without an account →</button>
   </div>
 </section>
@@ -108,11 +108,15 @@
             </div>
           </details>
         </fieldset>
-        <button id="analyze" class="primary" disabled>Analyze habitat <span aria-hidden="true">↗</span></button>
+        <button id="analyze" class="primary" disabled style="position: relative; justify-content: center;">
+          Analyze habitat
+          <span aria-hidden="true" style="position: absolute; right: 14px;">↗</span>
+        </button>
       </form>
       <button type="button" id="cancel" class="secondary" hidden>Cancel analysis</button>
       <p id="status" class="status" role="status" aria-live="polite">Getting ready…</p>
       <p id="error" class="error" role="alert" hidden></p>
+      <div class="scope-note">Analysis and trained models stay on this computer.</div>
     </aside>
 
     <section class="panel landscape" aria-label="Habitat map and results">
@@ -122,9 +126,9 @@
 
       <div class="results">
         <div id="empty">
-          <span class="eyebrow">RESULTS</span>
-          <h2>Choose a species and location</h2>
-          <p>Your habitat results will appear here</p>
+          <span class="eyebrow">A CLOSER LOOK</span>
+          <h2>Your next discovery starts here.</h2>
+          <p>Choose your species and location, then analyze the habitat.<br>Individual sample scores will appear on the map.</p>
         </div>
 
         <div id="result" hidden>
@@ -350,13 +354,13 @@
         </div>
         <span id="model-count" class="model-count"></span>
       </div>
-      <p class="manager-copy">Ready-to-use models and species you have trained</p>
+      <p class="manager-copy">Bundled models are always available. Custom models you train remain attached to your account until you choose to enable them.</p>
       <div id="model-list" class="model-list" aria-label="Saved species models"></div>
 
       <div id="model-review" class="model-review">
         <span class="eyebrow">REVIEW</span>
         <h3 id="review-species">Select a model</h3>
-        <div id="review-details" class="review-details"><p class="hint">Choose a species to see how its model performed</p></div>
+        <div id="review-details" class="review-details"><p class="hint">Choose a model to inspect its validation summary.</p></div>
         <p id="model-message" class="notice" role="status" hidden></p>
         <div class="model-actions">
           <button id="enable-model" type="button" class="primary">Use for habitat analysis</button>
