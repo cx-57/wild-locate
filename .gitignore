@@ -9,3 +9,4 @@ dist/
 
 build/
 *.app/
+.DS_Store
