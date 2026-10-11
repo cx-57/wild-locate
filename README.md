@@ -48,7 +48,7 @@ The browser app allows exploration without signing in; training, enabling, and m
 - Includes bundled Massachusetts models for Bobcat, Coyote, Fisher, North American River Otter, and Red Fox.
 - Trains custom **mammal and reptile** models from research-grade iNaturalist observations.
 - Uses target-group background observations, environmental feature extraction, and spatial cross-validation.
-- Supports Massachusetts, Florida, and Arizona; five ready-to-use models are bundled for Massachusetts only.
+- Supports Massachusetts, Florida, and Arizona with region-specific environmental inputs and models.
 - Stores custom models and enabled-model choices per local account.
 
 ## Deep Dive (browser app)
